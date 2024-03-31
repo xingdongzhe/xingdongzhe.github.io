@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html data-color-mode="light" data-dark-theme="dark" data-light-theme="light" lang="zh-CN">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link href="//cdn.staticfile.net/Primer/21.0.7/primer.css" rel="stylesheet" />
+    <link rel="icon" href="https://github.githubassets.com/favicons/favicon.svg">
+    <script>
+        if(localStorage.getItem("meek_theme")==null){}
+        else if(localStorage.getItem("meek_theme")=="dark"){document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="dark";}
+        else if(localStorage.getItem("meek_theme")=="light"){document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="light";}
+    </script>
+    
+<meta name="description" content="asyncio core code with simple implement">
+<title>asyncio core code with simple implement</title>
+<link href="//unpkg.com/@wooorm/starry-night@2.1.1/style/both.css" rel="stylesheet" />
+
+</head>
+<style>
+body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;padding: 45px;font-size: 16px;font-family: sans-serif;line-height: 1.25;}
+#header{display:flex;padding-bottom:8px;border-bottom: 1px solid var(--borderColor-muted, var(--color-border-muted));margin-bottom: 16px;}
+#footer {margin-top:64px; text-align: center;font-size: small;}
+
+</style>
+
+<style>
+.postTitle{margin: auto 0;font-size:40px;font-weight:bold;}
+.title-right{display:flex;margin:auto 0 0 auto;}
+.title-right .circle{padding: 14px 16px;margin-right:8px;}
+#postBody{border-bottom: 1px solid var(--color-border-default);padding-bottom:36px;}
+#postBody hr{height:2px;}
+#cmButton{height:48px;margin-top:48px;}
+#comments{margin-top:64px;}
+.g-emoji{font-size:24px;}
+@media (max-width: 600px) {
+    body {padding: 8px;}
+    .postTitle{font-size:24px;}
+}
+</style>
+
+
+
+
+<body>
+    <div id="header">
+<h1 class="postTitle">asyncio core code with simple implement</h1>
+<div class="title-right">
+    
+    <a href="https://xingdongzhe.github.io"><button id="buttonHome" class="btn btn-invisible circle" title="首页">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathHome" fill-rule="evenodd"></path>
+        </svg>
+    </button></a>
+
+    
+    <a href="https://github.com/xingdongzhe/xingdongzhe.github.io/issues/2" target="_blank"><button class="btn btn-invisible circle" title="Issue">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathIssue" fill-rule="evenodd"></path>
+        </svg>
+    </button></a>
+    
+
+    <button class="btn btn-invisible circle" onclick="modeSwitch();" title="切换主题">
+        <svg class="octicon" width="16" height="16" >
+            <path id="themeSwitch" fill-rule="evenodd"></path>
+        </svg>
+    </button>
+
+</div>
+</div>
+    <div id="content">
+<div class="markdown-body" id="postBody"><h3>asyncio 的重要组成部分</h3>
+<ul>
+<li>多路复用(select/poll/epoll)</li>
+<li>回调函数</li>
+<li>Eventloop(核心组件)</li>
+<li>Future</li>
+<li>Task</li>
+<li>Handle(TimerHandle)</li>
+</ul>
+<h3>异步编程模型</h3>
+<ul>
+<li>事件循环 + 回调</li>
+</ul>
+<h3>Eventloop(事件循环)是什么</h3>
+<ul>
+<li>一句话: 事件循环就一个循环，一个无限循环</li>
+</ul>
+<h3>Eventloop(事件循环)的作用是什么</h3>
+<ul>
+<li>
+<p>事件循环是 asyncio的心脏，负责处理 IO ，安排协程和回调函数的执行计划，即保存上下文、切换运行协程、恢复上下文、重新运行协程</p>
+</li>
+<li>
+<p>事件循环有三个重要组成部分</p>
+<ul>
+<li>IO 处理机制，多路复用</li>
+<li>任务队列</li>
+<li>待安排队列</li>
+</ul>
+<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-c"># base_event.py</span>
+<span class="pl-k">class</span> <span class="pl-v">BaseEventLoop</span>:
+  <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>):
+    <span class="pl-s1">self</span>.<span class="pl-s1">_ready</span> <span class="pl-c1">=</span> <span class="pl-en">deque</span>() <span class="pl-c"># List[Handle]</span>
+    <span class="pl-s1">self</span>.<span class="pl-s1">_scheduled</span> <span class="pl-c1">=</span> []  <span class="pl-c"># List[TimerHandl]，是一个最小二叉堆</span>
+    <span class="pl-s1">self</span>.<span class="pl-s1">_selector</span> <span class="pl-c1">=</span> <span class="pl-v">Selector</span>()
+    
+  <span class="pl-k">def</span> <span class="pl-en">run_until_complete</span>(<span class="pl-s1">self</span>, <span class="pl-s1">future</span>):
+    <span class="pl-k">pass</span>
+  
+  <span class="pl-k">def</span> <span class="pl-en">create_task</span>(<span class="pl-s1">self</span>, <span class="pl-s1">coro</span>):
+    <span class="pl-k">pass</span>
+  
+  <span class="pl-k">def</span> <span class="pl-en">_run_once</span>(<span class="pl-s1">self</span>):
+    <span class="pl-k">pass</span>
+  
+  <span class="pl-k">def</span> <span class="pl-en">call_soon</span>(<span class="pl-s1">self</span>, <span class="pl-s1">callback</span>, <span class="pl-c1">*</span><span class="pl-s1">args</span>):
+    <span class="pl-k">pass</span></pre></div>
+</li>
+<li>
+<p>asyncio 中的协程是如何串联起来的</p>
+<p><code class="notranslate">Task._step 和 Task._wakeup</code></p>
+</li>
+<li>
+<p>基于生成器的协程, <code class="notranslate">yield</code></p>
+<ul>
+<li>
+<p>可以保存自己的上下文，如运行状态，运行的值</p>
+</li>
+<li>
+<p>让出控制权</p>
+</li>
+<li>
+<p>产出一个值</p>
+</li>
+<li>
+<p>接收一个值</p>
+</li>
+<li>
+<p>可以多次重新进入从上次让出控制权的地方</p>
+</li>
+</ul>
+</li>
+<li>
+<p>原生协程, <code class="notranslate">__await__</code>或者<code class="notranslate">__iter__</code></p>
+</li>
+<li>
+<p>async 是一个关键字，async def 定义的类型还是一个function类型，只有当它被调用时才返回一个协程对象<br>
+<code class="notranslate">async def</code> 跟<code class="notranslate">def</code>定义的方法在没被调用时没有任何区别，不必看得很神秘，它也可以有<code class="notranslate">return</code>语句</p>
+</li>
+<li>
+<p>asyncio底层运行都是普通函数，每轮循环只会执行当前循环的就绪队列中的任务(函数)</p>
+</li>
+<li>
+<p>Async 和 await 只是语法糖，源码底下也是还是用了生成器, 是遇到<code class="notranslate">yield</code>关键字才会挂起</p>
+<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-k">def</span> <span class="pl-en">__iter__</span>(<span class="pl-s1">self</span>):
+  <span class="pl-k">if</span> <span class="pl-c1">not</span> <span class="pl-s1">self</span>.<span class="pl-en">done</span>():
+    <span class="pl-s1">self</span>.<span class="pl-s1">_asyncio_future_blocking</span> <span class="pl-c1">=</span> <span class="pl-c1">True</span>
+    <span class="pl-k">yield</span> <span class="pl-s1">self</span>  <span class="pl-c"># This tells Task to wait for completion.</span>
+    <span class="pl-k">assert</span> <span class="pl-s1">self</span>.<span class="pl-en">done</span>(), <span class="pl-s">"yield from wasn't used with future"</span>
+    <span class="pl-k">return</span> <span class="pl-s1">self</span>.<span class="pl-en">result</span>()  <span class="pl-c"># May raise too.</span>
+  
+<span class="pl-c"># PY35 = sys.version_info &gt;= (3, 5)</span>
+<span class="pl-k">if</span> <span class="pl-s1">compat</span>.<span class="pl-v">PY35</span>:
+		<span class="pl-s1">__await__</span> <span class="pl-c1">=</span> <span class="pl-s1">__iter__</span> <span class="pl-c"># make compatible with 'await' expression</span></pre></div>
+</li>
+<li>
+<p>生成器的方法</p>
+<ul>
+<li>send</li>
+<li>throw</li>
+<li>close</li>
+<li>__next__(next)</li>
+</ul>
+</li>
+<li>
+<p>生成器完结异常:</p>
+<p><code class="notranslate">StopIteration</code></p>
+</li>
+<li>
+<p>Event_loop</p>
+<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-c"># base_event.py</span>
+<span class="pl-k">class</span> <span class="pl-v">BaseEventLoop</span>:
+  <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>):
+    <span class="pl-s1">self</span>.<span class="pl-s1">_ready</span> <span class="pl-c1">=</span> <span class="pl-en">deque</span>() <span class="pl-c"># List[Handle]</span>
+    <span class="pl-s1">self</span>.<span class="pl-s1">_scheduled</span> <span class="pl-c1">=</span> []  <span class="pl-c"># List[TimerHandl]，是一个最小二叉堆</span>
+    <span class="pl-s1">self</span>.<span class="pl-s1">_selector</span> <span class="pl-c1">=</span> <span class="pl-v">Selector</span>()
+    
+  <span class="pl-k">def</span> <span class="pl-en">run_until_complete</span>(<span class="pl-s1">self</span>, <span class="pl-s1">future</span>):
+    <span class="pl-s1">future</span> <span class="pl-c1">=</span> <span class="pl-s1">tasks</span>.<span class="pl-en">ensure_future</span>(<span class="pl-s1">future</span>, <span class="pl-s1">loop</span><span class="pl-c1">=</span><span class="pl-s1">self</span>)
+    <span class="pl-s1">future</span>.<span class="pl-en">add_done_callback</span>(<span class="pl-s1">_run_until_complete_cb</span>)
+    <span class="pl-s1">self</span>.<span class="pl-en">run_forever</span>()
+    
+    
+  <span class="pl-k">def</span> <span class="pl-en">run_forever</span>():
+    <span class="pl-s1">self</span>.<span class="pl-en">_run_once</span>()
+  
+  <span class="pl-k">def</span> <span class="pl-en">create_task</span>(<span class="pl-s1">self</span>, <span class="pl-s1">coro</span>):
+     <span class="pl-s1">task</span> <span class="pl-c1">=</span> <span class="pl-s1">tasks</span>.<span class="pl-v">Task</span>(<span class="pl-s1">coro</span>, <span class="pl-s1">loop</span><span class="pl-c1">=</span><span class="pl-s1">self</span>)
+     <span class="pl-k">return</span> <span class="pl-s1">task</span>
+  
+  <span class="pl-k">def</span> <span class="pl-en">_run_once</span>(<span class="pl-s1">self</span>):
+    <span class="pl-s1">event_list</span> <span class="pl-c1">=</span> <span class="pl-s1">self</span>.<span class="pl-s1">_selector</span>.<span class="pl-en">select</span>(<span class="pl-s1">timeout</span>)
+    <span class="pl-s1">self</span>.<span class="pl-en">_process_events</span>(<span class="pl-s1">event_list</span>)
+    <span class="pl-s1">ntodo</span> <span class="pl-c1">=</span> <span class="pl-en">len</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_ready</span>)
+    <span class="pl-k">for</span> <span class="pl-s1">i</span> <span class="pl-c1">in</span> <span class="pl-en">range</span>(<span class="pl-s1">ntodo</span>):
+      <span class="pl-s1">handle</span> <span class="pl-c1">=</span> <span class="pl-s1">self</span>.<span class="pl-s1">_ready</span>.<span class="pl-en">popleft</span>()
+      <span class="pl-s1">handle</span>.<span class="pl-en">_run</span>()
+  
+  <span class="pl-k">def</span> <span class="pl-en">call_soon</span>(<span class="pl-s1">self</span>, <span class="pl-s1">callback</span>, <span class="pl-c1">*</span><span class="pl-s1">args</span>):
+    <span class="pl-s1">handle</span> <span class="pl-c1">=</span> <span class="pl-s1">events</span>.<span class="pl-v">Handle</span>(<span class="pl-s1">callback</span>, <span class="pl-s1">args</span>, <span class="pl-s1">self</span>)
+    <span class="pl-s1">self</span>.<span class="pl-s1">_ready</span>.<span class="pl-en">append</span>(<span class="pl-s1">handle</span>)
+    <span class="pl-k">return</span> <span class="pl-s1">handle</span>
+  
+  <span class="pl-k">def</span> <span class="pl-en">call_at</span>(<span class="pl-s1">self</span>, <span class="pl-s1">when</span>, <span class="pl-s1">callback</span>, <span class="pl-c1">*</span><span class="pl-s1">args</span>):
+    <span class="pl-s1">timer</span> <span class="pl-c1">=</span> <span class="pl-s1">events</span>.<span class="pl-v">TimerHandle</span>(<span class="pl-s1">when</span>, <span class="pl-s1">callback</span>, <span class="pl-s1">args</span>, <span class="pl-s1">self</span>)
+    <span class="pl-s1">heapq</span>.<span class="pl-en">heappush</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_scheduled</span>, <span class="pl-s1">timer</span>)
+    <span class="pl-s1">timer</span>.<span class="pl-s1">_scheduled</span> <span class="pl-c1">=</span> <span class="pl-c1">True</span>
+    <span class="pl-k">return</span> <span class="pl-s1">timer</span></pre></div>
+</li>
+<li>
+<p>Future</p>
+<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-c"># futures.py</span>
+<span class="pl-k">class</span> <span class="pl-v">Future</span>:
+  <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">loop</span><span class="pl-c1">=</span><span class="pl-c1">None</span>):
+    <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span> <span class="pl-c1">=</span> <span class="pl-s1">loop</span>
+    <span class="pl-s1">self</span>.<span class="pl-s1">_callback</span> <span class="pl-c1">=</span> [] <span class="pl-c"># List[Function]</span>
+    
+  <span class="pl-k">def</span> <span class="pl-en">set_result</span>(<span class="pl-s1">self</span>, <span class="pl-s1">result</span>):
+     <span class="pl-s1">self</span>.<span class="pl-s1">_result</span> <span class="pl-c1">=</span> <span class="pl-s1">result</span>
+     <span class="pl-s1">self</span>.<span class="pl-s1">_state</span> <span class="pl-c1">=</span> <span class="pl-s1">_FINISHED</span>
+     <span class="pl-k">for</span> <span class="pl-s1">callback</span> <span class="pl-c1">in</span> <span class="pl-s1">self</span>.<span class="pl-s1">callbacks</span>:
+        <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(<span class="pl-s1">callback</span>, <span class="pl-s1">self</span>)
+        
+  <span class="pl-k">def</span> <span class="pl-en">__iter__</span>(<span class="pl-s1">self</span>):
+  	<span class="pl-k">if</span> <span class="pl-c1">not</span> <span class="pl-s1">self</span>.<span class="pl-en">done</span>():
+    	<span class="pl-s1">self</span>.<span class="pl-s1">_asyncio_future_blocking</span> <span class="pl-c1">=</span> <span class="pl-c1">True</span>
+      <span class="pl-k">yield</span> <span class="pl-s1">self</span>  <span class="pl-c"># This tells Task to wait for completion.</span>
+    <span class="pl-k">assert</span> <span class="pl-s1">self</span>.<span class="pl-en">done</span>(), <span class="pl-s">"yield from wasn't used with future"</span>
+    <span class="pl-k">return</span> <span class="pl-s1">self</span>.<span class="pl-en">result</span>()  <span class="pl-c"># May raise too.</span></pre></div>
+</li>
+<li>
+<p>Task</p>
+<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-c"># tasks.py</span>
+<span class="pl-k">class</span> <span class="pl-v">Task</span>(<span class="pl-v">Future</span>):
+  <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">coro</span>, <span class="pl-c1">*</span>, <span class="pl-s1">loop</span><span class="pl-c1">=</span><span class="pl-c1">None</span>):
+    <span class="pl-en">super</span>().<span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">loop</span>)
+    <span class="pl-s1">self</span>.<span class="pl-s1">_coro</span> <span class="pl-c1">=</span> <span class="pl-s1">coro</span>
+    <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_step</span>)
+    
+	<span class="pl-k">def</span> <span class="pl-en">_step</span>(<span class="pl-s1">self</span>, <span class="pl-s1">exc</span><span class="pl-c1">=</span><span class="pl-c1">None</span>):
+    <span class="pl-s1">coro</span> <span class="pl-c1">=</span> <span class="pl-s1">self</span>.<span class="pl-s1">_coro</span>
+    <span class="pl-k">try</span>:
+    	<span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-s1">coro</span>.<span class="pl-en">send</span>(<span class="pl-c1">None</span>)
+    <span class="pl-k">except</span> <span class="pl-v">StopIteration</span> <span class="pl-k">as</span> <span class="pl-s1">exc</span>:
+      <span class="pl-s1">self</span>.<span class="pl-en">set_result</span>(<span class="pl-s1">exc</span>.<span class="pl-s1">value</span>)
+    <span class="pl-k">else</span>:
+      <span class="pl-s1">result</span>.<span class="pl-en">add_done_callback</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_wakeup</span>)
+    
+  
+  <span class="pl-k">def</span> <span class="pl-en">_wakeup</span>(<span class="pl-s1">self</span>, <span class="pl-s1">future</span>):
+    <span class="pl-s1">self</span>.<span class="pl-en">_step</span>()</pre></div>
+</li>
+<li>
+<p>Handle</p>
+<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-c"># events.py</span>
+<span class="pl-k">class</span> <span class="pl-v">Handle</span>:
+    <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">callback</span>, <span class="pl-s1">args</span>, <span class="pl-s1">loop</span>):
+        <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span> <span class="pl-c1">=</span> <span class="pl-s1">loop</span>
+        <span class="pl-s1">self</span>.<span class="pl-s1">_callback</span> <span class="pl-c1">=</span> <span class="pl-s1">callback</span>
+        <span class="pl-s1">self</span>.<span class="pl-s1">_args</span> <span class="pl-c1">=</span> <span class="pl-s1">args</span>
+        
+		<span class="pl-k">def</span> <span class="pl-en">_run</span>(<span class="pl-s1">self</span>):
+      <span class="pl-s1">self</span>.<span class="pl-en">_callback</span>(<span class="pl-c1">*</span><span class="pl-s1">self</span>.<span class="pl-s1">_args</span>)
+    
+    
+<span class="pl-k">class</span> <span class="pl-v">TimerHandle</span>(<span class="pl-v">Handle</span>):
+    <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">when</span>, <span class="pl-s1">callback</span>, <span class="pl-s1">args</span>, <span class="pl-s1">loop</span>):
+        <span class="pl-k">assert</span> <span class="pl-s1">when</span> <span class="pl-c1">is</span> <span class="pl-c1">not</span> <span class="pl-c1">None</span>
+        <span class="pl-en">super</span>().<span class="pl-en">__init__</span>(<span class="pl-s1">callback</span>, <span class="pl-s1">args</span>, <span class="pl-s1">loop</span>)
+        <span class="pl-s1">self</span>.<span class="pl-s1">_when</span> <span class="pl-c1">=</span> <span class="pl-s1">when</span>
+        <span class="pl-s1">self</span>.<span class="pl-s1">_scheduled</span> <span class="pl-c1">=</span> <span class="pl-c1">False</span></pre></div>
+</li>
+</ul>
+<h3>代码执行流程</h3>
+<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-k">import</span> <span class="pl-s1">asyncio</span>
+
+
+<span class="pl-k">async</span> <span class="pl-k">def</span> <span class="pl-en">cor</span>():
+    <span class="pl-en">print</span>(<span class="pl-s">'enter cor ...'</span>)
+    <span class="pl-k">await</span> <span class="pl-s1">asyncio</span>.<span class="pl-en">sleep</span>(<span class="pl-c1">2</span>)
+    <span class="pl-en">print</span>(<span class="pl-s">'exit cor ...'</span>)
+    
+    <span class="pl-k">return</span> <span class="pl-s">'cor'</span>
+
+<span class="pl-s1">loop</span> <span class="pl-c1">=</span> <span class="pl-s1">asyncio</span>.<span class="pl-en">get_event_loop</span>()
+<span class="pl-s1">task</span> <span class="pl-c1">=</span> <span class="pl-s1">loop</span>.<span class="pl-en">create_task</span>(<span class="pl-en">cor</span>())
+<span class="pl-s1">rst</span> <span class="pl-c1">=</span> <span class="pl-s1">loop</span>.<span class="pl-en">run_until_complete</span>(<span class="pl-s1">task</span>)
+<span class="pl-en">print</span>(<span class="pl-s1">rst</span>)</pre></div>
+<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-k">class</span> <span class="pl-v">Task</span>(<span class="pl-s1">futures</span>.<span class="pl-v">Future</span>):
+    
+    ...
+    
+    <span class="pl-k">def</span> <span class="pl-en">_step</span>(<span class="pl-s1">self</span>, <span class="pl-s1">exc</span><span class="pl-c1">=</span><span class="pl-c1">None</span>):
+        <span class="pl-s">"""</span>
+<span class="pl-s">        _step方法可以看做是task包装的coroutine对象中的代码的直到yield的前半部分逻辑</span>
+<span class="pl-s">        """</span>
+        ...
+        <span class="pl-k">try</span>:
+            <span class="pl-k">if</span> <span class="pl-s1">exc</span> <span class="pl-c1">is</span> <span class="pl-c1">None</span>:
+                
+                <span class="pl-c"># 1.关键代码</span>
+                <span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-s1">coro</span>.<span class="pl-en">send</span>(<span class="pl-c1">None</span>)
+            <span class="pl-k">else</span>:
+                <span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-s1">coro</span>.<span class="pl-en">throw</span>(<span class="pl-s1">exc</span>)
+        <span class="pl-c"># 2. coro执行完毕会抛出StopIteration异常</span>
+        <span class="pl-k">except</span> <span class="pl-v">StopIteration</span> <span class="pl-k">as</span> <span class="pl-s1">exc</span>:
+            <span class="pl-k">if</span> <span class="pl-s1">self</span>.<span class="pl-s1">_must_cancel</span>:
+                <span class="pl-c"># Task is cancelled right before coro stops.</span>
+                <span class="pl-s1">self</span>.<span class="pl-s1">_must_cancel</span> <span class="pl-c1">=</span> <span class="pl-c1">False</span>
+                <span class="pl-s1">self</span>.<span class="pl-en">set_exception</span>(<span class="pl-s1">futures</span>.<span class="pl-v">CancelledError</span>())
+            <span class="pl-k">else</span>:
+                <span class="pl-c"># result为None时，调用task的callbasks列表中的回调方法，在调用loop.run_until_complite，结束loop循环</span>
+                <span class="pl-s1">self</span>.<span class="pl-en">set_result</span>(<span class="pl-s1">exc</span>.<span class="pl-s1">value</span>)
+        <span class="pl-k">except</span> <span class="pl-s1">futures</span>.<span class="pl-v">CancelledError</span>:
+            <span class="pl-en">super</span>().<span class="pl-en">cancel</span>()  <span class="pl-c"># I.e., Future.cancel(self).</span>
+        <span class="pl-k">except</span> <span class="pl-v">Exception</span> <span class="pl-k">as</span> <span class="pl-s1">exc</span>:
+            <span class="pl-s1">self</span>.<span class="pl-en">set_exception</span>(<span class="pl-s1">exc</span>)
+        <span class="pl-k">except</span> <span class="pl-v">BaseException</span> <span class="pl-k">as</span> <span class="pl-s1">exc</span>:
+            <span class="pl-s1">self</span>.<span class="pl-en">set_exception</span>(<span class="pl-s1">exc</span>)
+            <span class="pl-k">raise</span>
+        <span class="pl-c"># 3. result = coro.send(None)不抛出异常</span>
+        <span class="pl-k">else</span>:
+            <span class="pl-c"># 4. 查看result是否含有_asyncio_future_blocking属性</span>
+            <span class="pl-s1">blocking</span> <span class="pl-c1">=</span> <span class="pl-en">getattr</span>(<span class="pl-s1">result</span>, <span class="pl-s">'_asyncio_future_blocking'</span>, <span class="pl-c1">None</span>)
+            <span class="pl-k">if</span> <span class="pl-s1">blocking</span> <span class="pl-c1">is</span> <span class="pl-c1">not</span> <span class="pl-c1">None</span>:
+                <span class="pl-c"># Yielded Future must come from Future.__iter__().</span>
+                <span class="pl-k">if</span> <span class="pl-s1">result</span>.<span class="pl-s1">_loop</span> <span class="pl-c1">is</span> <span class="pl-c1">not</span> <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>:
+                    <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(
+                        <span class="pl-s1">self</span>.<span class="pl-s1">_step</span>,
+                        <span class="pl-v">RuntimeError</span>(
+                            <span class="pl-s">'Task {!r} got Future {!r} attached to a '</span>
+                            <span class="pl-s">'different loop'</span>.<span class="pl-en">format</span>(<span class="pl-s1">self</span>, <span class="pl-s1">result</span>)))
+                
+                <span class="pl-k">elif</span> <span class="pl-s1">blocking</span>:
+                    <span class="pl-k">if</span> <span class="pl-s1">result</span> <span class="pl-c1">is</span> <span class="pl-s1">self</span>:
+                        <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(
+                            <span class="pl-s1">self</span>.<span class="pl-s1">_step</span>,
+                            <span class="pl-v">RuntimeError</span>(
+                                <span class="pl-s">'Task cannot await on itself: {!r}'</span>.<span class="pl-en">format</span>(
+                                    <span class="pl-s1">self</span>)))
+                    <span class="pl-c"># 4.1. 如果result是一个future对象时，blocking会被设置成true</span>
+                    <span class="pl-k">else</span>:
+                        <span class="pl-s1">result</span>.<span class="pl-s1">_asyncio_future_blocking</span> <span class="pl-c1">=</span> <span class="pl-c1">False</span>
+                        <span class="pl-c"># 把_wakeup回调函数设置到此future对象中，当此future对象调用set_result()方法时，就会调用_wakeup方法</span>
+                        <span class="pl-s1">result</span>.<span class="pl-en">add_done_callback</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_wakeup</span>)
+                        <span class="pl-s1">self</span>.<span class="pl-s1">_fut_waiter</span> <span class="pl-c1">=</span> <span class="pl-s1">result</span>
+                        <span class="pl-k">if</span> <span class="pl-s1">self</span>.<span class="pl-s1">_must_cancel</span>:
+                            <span class="pl-k">if</span> <span class="pl-s1">self</span>.<span class="pl-s1">_fut_waiter</span>.<span class="pl-en">cancel</span>():
+                                <span class="pl-s1">self</span>.<span class="pl-s1">_must_cancel</span> <span class="pl-c1">=</span> <span class="pl-c1">False</span>
+                <span class="pl-k">else</span>:
+                    <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(
+                        <span class="pl-s1">self</span>.<span class="pl-s1">_step</span>,
+                        <span class="pl-v">RuntimeError</span>(
+                            <span class="pl-s">'yield was used instead of yield from '</span>
+                            <span class="pl-s">'in task {!r} with {!r}'</span>.<span class="pl-en">format</span>(<span class="pl-s1">self</span>, <span class="pl-s1">result</span>)))
+            <span class="pl-c"># 5. 如果result是None，则注册task._step到loop对象中去，在下一轮_run_once中被回调</span>
+            <span class="pl-k">elif</span> <span class="pl-s1">result</span> <span class="pl-c1">is</span> <span class="pl-c1">None</span>:
+                <span class="pl-c"># Bare yield relinquishes control for one event loop iteration.</span>
+                <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_step</span>)
+
+            <span class="pl-c"># --------下面的代码可以暂时不关注了--------</span>
+            <span class="pl-k">elif</span> <span class="pl-s1">inspect</span>.<span class="pl-en">isgenerator</span>(<span class="pl-s1">result</span>):
+                <span class="pl-c"># Yielding a generator is just wrong.</span>
+                <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(
+                    <span class="pl-s1">self</span>.<span class="pl-s1">_step</span>,
+                    <span class="pl-v">RuntimeError</span>(
+                        <span class="pl-s">'yield was used instead of yield from for '</span>
+                        <span class="pl-s">'generator in task {!r} with {}'</span>.<span class="pl-en">format</span>(
+                            <span class="pl-s1">self</span>, <span class="pl-s1">result</span>)))
+            <span class="pl-k">else</span>:
+                <span class="pl-c"># Yielding something else is an error.</span>
+                <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(
+                    <span class="pl-s1">self</span>.<span class="pl-s1">_step</span>,
+                    <span class="pl-v">RuntimeError</span>(
+                        <span class="pl-s">'Task got bad yield: {!r}'</span>.<span class="pl-en">format</span>(<span class="pl-s1">result</span>)))
+        <span class="pl-k">finally</span>:
+            <span class="pl-s1">self</span>.<span class="pl-s1">__class__</span>.<span class="pl-s1">_current_tasks</span>.<span class="pl-en">pop</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>)
+            <span class="pl-s1">self</span> <span class="pl-c1">=</span> <span class="pl-c1">None</span>  <span class="pl-c"># Needed to break cycles when an exception occurs.</span>
+
+    <span class="pl-k">def</span> <span class="pl-en">_wakeup</span>(<span class="pl-s1">self</span>, <span class="pl-s1">future</span>):
+        <span class="pl-k">try</span>:
+            <span class="pl-s1">future</span>.<span class="pl-en">result</span>()
+        <span class="pl-k">except</span> <span class="pl-v">Exception</span> <span class="pl-k">as</span> <span class="pl-s1">exc</span>:
+            <span class="pl-c"># This may also be a cancellation.</span>
+            <span class="pl-s1">self</span>.<span class="pl-en">_step</span>(<span class="pl-s1">exc</span>)
+        <span class="pl-k">else</span>:
+            
+            <span class="pl-c"># 这里是关键代码，上次的_step()执行到第一次碰到yield的地方挂住了，此时再次执行_step(),</span>
+            <span class="pl-c"># 也就是再次执行 result = coro.send(None) 这句代码，也就是从上次yield的地方继续执行yield后面的逻辑</span>
+            <span class="pl-s1">self</span>.<span class="pl-en">_step</span>()
+        <span class="pl-s1">self</span> <span class="pl-c1">=</span> <span class="pl-c1">None</span>  <span class="pl-c"># Needed to break cycles when an exception occurs.</span></pre></div>
+<p><code class="notranslate">run_until_complete()</code> --&gt; <code class="notranslate">run_forever()</code> --&gt; <code class="notranslate">_run_once()</code>，重点看<code class="notranslate">_run_once</code>这个方法的执行</p>
+<p>此时:</p>
+<ul>
+<li><code class="notranslate">cor</code>协程还未开始执行</li>
+<li><code class="notranslate">loop._ready = [handle(task._step)]</code>，<code class="notranslate">loop._scheduled = [], task._callbacks=[_run_until_complete_cb]</code></li>
+</ul>
+<h4>第一轮<code class="notranslate">_run_once()</code>的调用执行开始</h4>
+<p>此时:</p>
+<ul>
+<li><code class="notranslate">cor</code>协程的执行流程挂起在<code class="notranslate">sleep</code>协程的中产生的新<code class="notranslate">Future</code>对象的<code class="notranslate">__iter__</code>方法的<code class="notranslate">yield</code>处</li>
+<li>新<code class="notranslate">Future</code>对象的<code class="notranslate">_callbacks = [task._wakeup,]</code></li>
+<li><code class="notranslate">loop._scheduled=[handle(delay_2s__set_result_unless_cancelled)]</code>，<code class="notranslate">loop._ready=[]</code></li>
+</ul>
+<h4>第二轮<code class="notranslate">_run_once()</code>的调用执行开始</h4>
+<p>此时:</p>
+<ul>
+<li>
+<p><code class="notranslate">cor</code>协程的执行流程挂起在<code class="notranslate">sleep</code>协程的中产生的新<code class="notranslate">Future</code>对象的<code class="notranslate">__iter__</code>方法的<code class="notranslate">yield</code>处。</p>
+</li>
+<li>
+<p>新<code class="notranslate">Future</code>对象的<code class="notranslate">_callbacks = []</code></p>
+</li>
+<li>
+<p><code class="notranslate">loop._ready = [handle(task._wakeup)]</code>， <code class="notranslate">loop._scheduled=[]</code></p>
+</li>
+</ul>
+<h4>第三轮<code class="notranslate">_run_once()</code>的调用执行开始</h4>
+<p>此时:</p>
+<ul>
+<li>
+<p><code class="notranslate">cor</code>协程的执行完毕。</p>
+</li>
+<li>
+<p>新<code class="notranslate">Future</code>对象的<code class="notranslate">_callbacks = []</code></p>
+</li>
+<li>
+<p><code class="notranslate">loop._ready = [handle(_run_until_complete_cb)]</code>， <code class="notranslate">loop._scheduled=[]</code></p>
+</li>
+</ul>
+<h4>第四轮<code class="notranslate">_run_once()</code>开始执行</h4>
+<p>跳出<code class="notranslate">while</code>循环， <code class="notranslate">run_forever()</code>执行结束，<code class="notranslate">run_until_complete()</code>也就执行完毕了，最后把<code class="notranslate">cor</code>协程的返回值'cor'返回出来赋值给<code class="notranslate">rst</code>变量。</p>
+<p>到此为止所有整个<code class="notranslate">task</code>任务执行完毕，<code class="notranslate">loop</code>循环关闭</p>
+<h3>总结</h3>
+<p>Asyncio 就是利用操作系统 的多路复用机制处理 IO 阻塞，通过就绪队列<code class="notranslate">loop._ready</code> 以及延迟最小堆<code class="notranslate">loop._scheduled</code>存放回调函数，通过生成器来让分散的回调代码变成逻辑同步代码, 然后在时间循环中通过<code class="notranslate">Task._step</code>和<code class="notranslate">Task._wakeup</code>进行完成一整个调用逻辑链路</p></div>
+<div style="font-size:small;margin-top:8px;float:right;"></div>
+<button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
+<div class="comments" id="comments"></div>
+</div>
+    <div id="footer">Copyright © <span id="year"></span><a href="https://xingdongzhe.github.io"> Blog Title </a>
+<p>
+<span id="runday"></span>Powered by <a href="https://meekdai.com/Gmeek.html" target="_blank">Gmeek</a>
+</p>
+
+<script>
+if(""!=""){
+    var now=new Date();
+    var startSite=new Date("");
+    var diff=now.getTime()-startSite.getTime();
+    var diffDay=Math.floor(diff/(1000*60*60*24));
+    document.getElementById("year").innerHTML=now.getFullYear();
+    if(""!=""){document.getElementById("runday").innerHTML=" • "+"网站运行"+diffDay+"天"+" • ";}
+    else{document.getElementById("runday").innerHTML="网站运行"+diffDay+"天"+" • ";}
+}
+</script>
+</div>
+</body>
+<script>
+var IconList={'sun': 'M8 10.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM8 12a4 4 0 100-8 4 4 0 000 8zM8 0a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V.75A.75.75 0 018 0zm0 13a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 13zM2.343 2.343a.75.75 0 011.061 0l1.06 1.061a.75.75 0 01-1.06 1.06l-1.06-1.06a.75.75 0 010-1.06zm9.193 9.193a.75.75 0 011.06 0l1.061 1.06a.75.75 0 01-1.06 1.061l-1.061-1.06a.75.75 0 010-1.061zM16 8a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0116 8zM3 8a.75.75 0 01-.75.75H.75a.75.75 0 010-1.5h1.5A.75.75 0 013 8zm10.657-5.657a.75.75 0 010 1.061l-1.061 1.06a.75.75 0 11-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zm-9.193 9.193a.75.75 0 010 1.06l-1.06 1.061a.75.75 0 11-1.061-1.06l1.06-1.061a.75.75 0 011.061 0z', 'moon': 'M9.598 1.591a.75.75 0 01.785-.175 7 7 0 11-8.967 8.967.75.75 0 01.961-.96 5.5 5.5 0 007.046-7.046.75.75 0 01.175-.786zm1.616 1.945a7 7 0 01-7.678 7.678 5.5 5.5 0 107.678-7.678z', 'home': 'M6.906.664a1.749 1.749 0 0 1 2.187 0l5.25 4.2c.415.332.657.835.657 1.367v7.019A1.75 1.75 0 0 1 13.25 15h-3.5a.75.75 0 0 1-.75-.75V9H7v5.25a.75.75 0 0 1-.75.75h-3.5A1.75 1.75 0 0 1 1 13.25V6.23c0-.531.242-1.034.657-1.366l5.25-4.2Zm1.25 1.171a.25.25 0 0 0-.312 0l-5.25 4.2a.25.25 0 0 0-.094.196v7.019c0 .138.112.25.25.25H5.5V8.25a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v5.25h2.75a.25.25 0 0 0 .25-.25V6.23a.25.25 0 0 0-.094-.195Z', 'github': 'M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z'};
+var utterancesLoad=0;
+if(localStorage.getItem("meek_theme")==null){localStorage.setItem("meek_theme","light");changeLight();}
+else if(localStorage.getItem("meek_theme")=="dark"){changeDark();}
+else if(localStorage.getItem("meek_theme")=="light"){changeLight();}
+
+function changeDark(){
+    document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="dark";
+    document.getElementById("themeSwitch").setAttribute("d",value=IconList["moon"]);
+    document.getElementById("themeSwitch").parentNode.style.color="#00f0ff";
+    if(utterancesLoad==1){utterancesTheme("dark-blue");}
+}
+function changeLight(){
+    document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="light";
+    document.getElementById("themeSwitch").setAttribute("d",value=IconList["sun"]);
+    document.getElementById("themeSwitch").parentNode.style.color="#ff5000";
+    if(utterancesLoad==1){utterancesTheme("github-light");}
+}
+function modeSwitch(){
+    if(document.getElementsByTagName("html")[0].attributes[0].value=="light"){changeDark();localStorage.setItem("meek_theme","dark");}
+    else{changeLight();localStorage.setItem("meek_theme","light");}
+}
+function utterancesTheme(theme){
+    const message = {type: 'set-theme',theme: theme};
+    const iframe = document.getElementsByClassName('utterances-frame')[0];
+    iframe.contentWindow.postMessage(message, 'https://utteranc.es');
+}
+
+console.log("\n %c Gmeek last %c https://github.com/Meekdai/Gmeek \n\n", "color: #fff; background-image: linear-gradient(90deg, rgb(47, 172, 178) 0%, rgb(45, 190, 96) 100%); padding:5px 1px;", "background-image: linear-gradient(90deg, rgb(45, 190, 96) 0%, rgb(255, 255, 255) 100%); padding:5px 0;");
+</script>
+
+<script>
+document.getElementById("pathHome").setAttribute("d",IconList["home"]);
+document.getElementById("pathIssue").setAttribute("d",IconList["github"]);
+
+
+function openComments(){
+    cm=document.getElementById("comments");
+    cmButton=document.getElementById("cmButton");
+    cmButton.innerHTML="loading";
+    span=document.createElement("span");
+    span.setAttribute("class","AnimatedEllipsis");
+    cmButton.appendChild(span);
+
+    script=document.createElement("script");
+    script.setAttribute("src","https://utteranc.es/client.js");
+    script.setAttribute("repo","xingdongzhe/xingdongzhe.github.io");
+    script.setAttribute("issue-term","title");
+    if(localStorage.getItem("meek_theme")=="dark"){script.setAttribute("theme","dark-blue");}
+    else{script.setAttribute("theme","github-light");}
+    script.setAttribute("crossorigin","anonymous");
+    script.setAttribute("async","");
+    cm.appendChild(script);
+
+    int=self.setInterval("iFrameLoading()",200);
+}
+
+function iFrameLoading(){
+    var utterances=document.getElementsByClassName('utterances');
+    if(utterances.length==1){
+        if(utterances[0].style.height!=""){
+            utterancesLoad=1;
+            int=window.clearInterval(int);
+            document.getElementById("cmButton").style.display="none";
+            console.log("utterances Load OK");
+        }
+    }
+}
+
+</script>
+
+
+
+</html>
