@@ -86,7 +86,7 @@
     if not self.done():
       self._asyncio_future_blocking = True
       yield self  # This tells Task to wait for completion.
-      assert self.done(), "yield from wasn't used with future"
+      assert self.done(), 'yield from wasn't used with future'
       return self.result()  # May raise too.
     
   # PY35 = sys.version_info >= (3, 5)
@@ -171,7 +171,7 @@
     	if not self.done():
       	self._asyncio_future_blocking = True
         yield self  # This tells Task to wait for completion.
-      assert self.done(), "yield from wasn't used with future"
+      assert self.done(), 'yield from wasn't used with future'
       return self.result()  # May raise too.
   ```
 
@@ -250,9 +250,9 @@ class Task(futures.Future):
     ...
     
     def _step(self, exc=None):
-        """
+        '''
         _step方法可以看做是task包装的coroutine对象中的代码的直到yield的前半部分逻辑
-        """
+        '''
         ...
         try:
             if exc is None:
@@ -452,7 +452,7 @@ class Task(futures.Future):
     if not self.done():
       self._asyncio_future_blocking = True
       yield self  # This tells Task to wait for completion.
-      assert self.done(), "yield from wasn't used with future"
+      assert self.done(), 'yield from wasn't used with future'
       return self.result()  # May raise too.
     
   # PY35 = sys.version_info >= (3, 5)
@@ -537,7 +537,7 @@ class Task(futures.Future):
     	if not self.done():
       	self._asyncio_future_blocking = True
         yield self  # This tells Task to wait for completion.
-      assert self.done(), "yield from wasn't used with future"
+      assert self.done(), 'yield from wasn't used with future'
       return self.result()  # May raise too.
   ```
 
@@ -616,9 +616,9 @@ class Task(futures.Future):
     ...
     
     def _step(self, exc=None):
-        """
+        '''
         _step方法可以看做是task包装的coroutine对象中的代码的直到yield的前半部分逻辑
-        """
+        '''
         ...
         try:
             if exc is None:
@@ -1267,7 +1267,6 @@ function iFrameLoading(){
     }
 }
 </script>
-
 
 
 </html>
