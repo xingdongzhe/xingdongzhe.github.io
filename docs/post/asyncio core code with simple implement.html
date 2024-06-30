@@ -744,7 +744,7 @@ class Task(futures.Future):
 <meta property="og:url" content="https://xingdongzhe.github.io/post/asyncio%20core%20code%20with%20simple%20implement.html">
 <meta property="og:image" content="https://github.githubassets.com/favicons/favicon.svg">
 <title>asyncio core code with simple implement</title>
-<link href="//unpkg.com/@wooorm/starry-night@2.1.1/style/both.css" rel="stylesheet" />
+
 
 </head>
 <style>
@@ -827,24 +827,25 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
 <li>任务队列</li>
 <li>待安排队列</li>
 </ul>
-<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-c"># base_event.py</span>
-<span class="pl-k">class</span> <span class="pl-v">BaseEventLoop</span>:
-  <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>):
-    <span class="pl-s1">self</span>.<span class="pl-s1">_ready</span> <span class="pl-c1">=</span> <span class="pl-en">deque</span>() <span class="pl-c"># List[Handle]</span>
-    <span class="pl-s1">self</span>.<span class="pl-s1">_scheduled</span> <span class="pl-c1">=</span> []  <span class="pl-c"># List[TimerHandl]，是一个最小二叉堆</span>
-    <span class="pl-s1">self</span>.<span class="pl-s1">_selector</span> <span class="pl-c1">=</span> <span class="pl-v">Selector</span>()
+<pre lang="python" class="notranslate"><code class="notranslate"># base_event.py
+class BaseEventLoop:
+  def __init__(self):
+    self._ready = deque() # List[Handle]
+    self._scheduled = []  # List[TimerHandl]，是一个最小二叉堆
+    self._selector = Selector()
     
-  <span class="pl-k">def</span> <span class="pl-en">run_until_complete</span>(<span class="pl-s1">self</span>, <span class="pl-s1">future</span>):
-    <span class="pl-k">pass</span>
+  def run_until_complete(self, future):
+    pass
   
-  <span class="pl-k">def</span> <span class="pl-en">create_task</span>(<span class="pl-s1">self</span>, <span class="pl-s1">coro</span>):
-    <span class="pl-k">pass</span>
+  def create_task(self, coro):
+    pass
   
-  <span class="pl-k">def</span> <span class="pl-en">_run_once</span>(<span class="pl-s1">self</span>):
-    <span class="pl-k">pass</span>
+  def _run_once(self):
+    pass
   
-  <span class="pl-k">def</span> <span class="pl-en">call_soon</span>(<span class="pl-s1">self</span>, <span class="pl-s1">callback</span>, <span class="pl-c1">*</span><span class="pl-s1">args</span>):
-    <span class="pl-k">pass</span></pre></div>
+  def call_soon(self, callback, *args):
+    pass
+</code></pre>
 </li>
 <li>
 <p>asyncio 中的协程是如何串联起来的</p>
@@ -882,16 +883,17 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
 </li>
 <li>
 <p>Async 和 await 只是语法糖，源码底下也是还是用了生成器, 是遇到<code class="notranslate">yield</code>关键字才会挂起</p>
-<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-k">def</span> <span class="pl-en">__iter__</span>(<span class="pl-s1">self</span>):
-  <span class="pl-k">if</span> <span class="pl-c1">not</span> <span class="pl-s1">self</span>.<span class="pl-en">done</span>():
-    <span class="pl-s1">self</span>.<span class="pl-s1">_asyncio_future_blocking</span> <span class="pl-c1">=</span> <span class="pl-c1">True</span>
-    <span class="pl-k">yield</span> <span class="pl-s1">self</span>  <span class="pl-c"># This tells Task to wait for completion.</span>
-    <span class="pl-k">assert</span> <span class="pl-s1">self</span>.<span class="pl-en">done</span>(), <span class="pl-s">"yield from wasn't used with future"</span>
-    <span class="pl-k">return</span> <span class="pl-s1">self</span>.<span class="pl-en">result</span>()  <span class="pl-c"># May raise too.</span>
+<pre lang="python" class="notranslate"><code class="notranslate">def __iter__(self):
+  if not self.done():
+    self._asyncio_future_blocking = True
+    yield self  # This tells Task to wait for completion.
+    assert self.done(), "yield from wasn't used with future"
+    return self.result()  # May raise too.
   
-<span class="pl-c"># PY35 = sys.version_info &gt;= (3, 5)</span>
-<span class="pl-k">if</span> <span class="pl-s1">compat</span>.<span class="pl-v">PY35</span>:
-		<span class="pl-s1">__await__</span> <span class="pl-c1">=</span> <span class="pl-s1">__iter__</span> <span class="pl-c"># make compatible with 'await' expression</span></pre></div>
+# PY35 = sys.version_info &gt;= (3, 5)
+if compat.PY35:
+		__await__ = __iter__ # make compatible with 'await' expression
+</code></pre>
 </li>
 <li>
 <p>生成器的方法</p>
@@ -908,227 +910,233 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
 </li>
 <li>
 <p>Event_loop</p>
-<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-c"># base_event.py</span>
-<span class="pl-k">class</span> <span class="pl-v">BaseEventLoop</span>:
-  <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>):
-    <span class="pl-s1">self</span>.<span class="pl-s1">_ready</span> <span class="pl-c1">=</span> <span class="pl-en">deque</span>() <span class="pl-c"># List[Handle]</span>
-    <span class="pl-s1">self</span>.<span class="pl-s1">_scheduled</span> <span class="pl-c1">=</span> []  <span class="pl-c"># List[TimerHandl]，是一个最小二叉堆</span>
-    <span class="pl-s1">self</span>.<span class="pl-s1">_selector</span> <span class="pl-c1">=</span> <span class="pl-v">Selector</span>()
+<pre lang="python" class="notranslate"><code class="notranslate"># base_event.py
+class BaseEventLoop:
+  def __init__(self):
+    self._ready = deque() # List[Handle]
+    self._scheduled = []  # List[TimerHandl]，是一个最小二叉堆
+    self._selector = Selector()
     
-  <span class="pl-k">def</span> <span class="pl-en">run_until_complete</span>(<span class="pl-s1">self</span>, <span class="pl-s1">future</span>):
-    <span class="pl-s1">future</span> <span class="pl-c1">=</span> <span class="pl-s1">tasks</span>.<span class="pl-en">ensure_future</span>(<span class="pl-s1">future</span>, <span class="pl-s1">loop</span><span class="pl-c1">=</span><span class="pl-s1">self</span>)
-    <span class="pl-s1">future</span>.<span class="pl-en">add_done_callback</span>(<span class="pl-s1">_run_until_complete_cb</span>)
-    <span class="pl-s1">self</span>.<span class="pl-en">run_forever</span>()
+  def run_until_complete(self, future):
+    future = tasks.ensure_future(future, loop=self)
+    future.add_done_callback(_run_until_complete_cb)
+    self.run_forever()
     
     
-  <span class="pl-k">def</span> <span class="pl-en">run_forever</span>():
-    <span class="pl-s1">self</span>.<span class="pl-en">_run_once</span>()
+  def run_forever():
+    self._run_once()
   
-  <span class="pl-k">def</span> <span class="pl-en">create_task</span>(<span class="pl-s1">self</span>, <span class="pl-s1">coro</span>):
-     <span class="pl-s1">task</span> <span class="pl-c1">=</span> <span class="pl-s1">tasks</span>.<span class="pl-v">Task</span>(<span class="pl-s1">coro</span>, <span class="pl-s1">loop</span><span class="pl-c1">=</span><span class="pl-s1">self</span>)
-     <span class="pl-k">return</span> <span class="pl-s1">task</span>
+  def create_task(self, coro):
+     task = tasks.Task(coro, loop=self)
+     return task
   
-  <span class="pl-k">def</span> <span class="pl-en">_run_once</span>(<span class="pl-s1">self</span>):
-    <span class="pl-s1">event_list</span> <span class="pl-c1">=</span> <span class="pl-s1">self</span>.<span class="pl-s1">_selector</span>.<span class="pl-en">select</span>(<span class="pl-s1">timeout</span>)
-    <span class="pl-s1">self</span>.<span class="pl-en">_process_events</span>(<span class="pl-s1">event_list</span>)
-    <span class="pl-s1">ntodo</span> <span class="pl-c1">=</span> <span class="pl-en">len</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_ready</span>)
-    <span class="pl-k">for</span> <span class="pl-s1">i</span> <span class="pl-c1">in</span> <span class="pl-en">range</span>(<span class="pl-s1">ntodo</span>):
-      <span class="pl-s1">handle</span> <span class="pl-c1">=</span> <span class="pl-s1">self</span>.<span class="pl-s1">_ready</span>.<span class="pl-en">popleft</span>()
-      <span class="pl-s1">handle</span>.<span class="pl-en">_run</span>()
+  def _run_once(self):
+    event_list = self._selector.select(timeout)
+    self._process_events(event_list)
+    ntodo = len(self._ready)
+    for i in range(ntodo):
+      handle = self._ready.popleft()
+      handle._run()
   
-  <span class="pl-k">def</span> <span class="pl-en">call_soon</span>(<span class="pl-s1">self</span>, <span class="pl-s1">callback</span>, <span class="pl-c1">*</span><span class="pl-s1">args</span>):
-    <span class="pl-s1">handle</span> <span class="pl-c1">=</span> <span class="pl-s1">events</span>.<span class="pl-v">Handle</span>(<span class="pl-s1">callback</span>, <span class="pl-s1">args</span>, <span class="pl-s1">self</span>)
-    <span class="pl-s1">self</span>.<span class="pl-s1">_ready</span>.<span class="pl-en">append</span>(<span class="pl-s1">handle</span>)
-    <span class="pl-k">return</span> <span class="pl-s1">handle</span>
+  def call_soon(self, callback, *args):
+    handle = events.Handle(callback, args, self)
+    self._ready.append(handle)
+    return handle
   
-  <span class="pl-k">def</span> <span class="pl-en">call_at</span>(<span class="pl-s1">self</span>, <span class="pl-s1">when</span>, <span class="pl-s1">callback</span>, <span class="pl-c1">*</span><span class="pl-s1">args</span>):
-    <span class="pl-s1">timer</span> <span class="pl-c1">=</span> <span class="pl-s1">events</span>.<span class="pl-v">TimerHandle</span>(<span class="pl-s1">when</span>, <span class="pl-s1">callback</span>, <span class="pl-s1">args</span>, <span class="pl-s1">self</span>)
-    <span class="pl-s1">heapq</span>.<span class="pl-en">heappush</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_scheduled</span>, <span class="pl-s1">timer</span>)
-    <span class="pl-s1">timer</span>.<span class="pl-s1">_scheduled</span> <span class="pl-c1">=</span> <span class="pl-c1">True</span>
-    <span class="pl-k">return</span> <span class="pl-s1">timer</span></pre></div>
+  def call_at(self, when, callback, *args):
+    timer = events.TimerHandle(when, callback, args, self)
+    heapq.heappush(self._scheduled, timer)
+    timer._scheduled = True
+    return timer
+</code></pre>
 </li>
 <li>
 <p>Future</p>
-<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-c"># futures.py</span>
-<span class="pl-k">class</span> <span class="pl-v">Future</span>:
-  <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">loop</span><span class="pl-c1">=</span><span class="pl-c1">None</span>):
-    <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span> <span class="pl-c1">=</span> <span class="pl-s1">loop</span>
-    <span class="pl-s1">self</span>.<span class="pl-s1">_callback</span> <span class="pl-c1">=</span> [] <span class="pl-c"># List[Function]</span>
+<pre lang="python" class="notranslate"><code class="notranslate"># futures.py
+class Future:
+  def __init__(self, loop=None):
+    self._loop = loop
+    self._callback = [] # List[Function]
     
-  <span class="pl-k">def</span> <span class="pl-en">set_result</span>(<span class="pl-s1">self</span>, <span class="pl-s1">result</span>):
-     <span class="pl-s1">self</span>.<span class="pl-s1">_result</span> <span class="pl-c1">=</span> <span class="pl-s1">result</span>
-     <span class="pl-s1">self</span>.<span class="pl-s1">_state</span> <span class="pl-c1">=</span> <span class="pl-s1">_FINISHED</span>
-     <span class="pl-k">for</span> <span class="pl-s1">callback</span> <span class="pl-c1">in</span> <span class="pl-s1">self</span>.<span class="pl-s1">callbacks</span>:
-        <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(<span class="pl-s1">callback</span>, <span class="pl-s1">self</span>)
+  def set_result(self, result):
+     self._result = result
+     self._state = _FINISHED
+     for callback in self.callbacks:
+        self._loop.call_soon(callback, self)
         
-  <span class="pl-k">def</span> <span class="pl-en">__iter__</span>(<span class="pl-s1">self</span>):
-  	<span class="pl-k">if</span> <span class="pl-c1">not</span> <span class="pl-s1">self</span>.<span class="pl-en">done</span>():
-    	<span class="pl-s1">self</span>.<span class="pl-s1">_asyncio_future_blocking</span> <span class="pl-c1">=</span> <span class="pl-c1">True</span>
-      <span class="pl-k">yield</span> <span class="pl-s1">self</span>  <span class="pl-c"># This tells Task to wait for completion.</span>
-    <span class="pl-k">assert</span> <span class="pl-s1">self</span>.<span class="pl-en">done</span>(), <span class="pl-s">"yield from wasn't used with future"</span>
-    <span class="pl-k">return</span> <span class="pl-s1">self</span>.<span class="pl-en">result</span>()  <span class="pl-c"># May raise too.</span></pre></div>
+  def __iter__(self):
+  	if not self.done():
+    	self._asyncio_future_blocking = True
+      yield self  # This tells Task to wait for completion.
+    assert self.done(), "yield from wasn't used with future"
+    return self.result()  # May raise too.
+</code></pre>
 </li>
 <li>
 <p>Task</p>
-<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-c"># tasks.py</span>
-<span class="pl-k">class</span> <span class="pl-v">Task</span>(<span class="pl-v">Future</span>):
-  <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">coro</span>, <span class="pl-c1">*</span>, <span class="pl-s1">loop</span><span class="pl-c1">=</span><span class="pl-c1">None</span>):
-    <span class="pl-en">super</span>().<span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">loop</span>)
-    <span class="pl-s1">self</span>.<span class="pl-s1">_coro</span> <span class="pl-c1">=</span> <span class="pl-s1">coro</span>
-    <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_step</span>)
+<pre lang="python" class="notranslate"><code class="notranslate"># tasks.py
+class Task(Future):
+  def __init__(self, coro, *, loop=None):
+    super().__init__(self, loop)
+    self._coro = coro
+    self._loop.call_soon(self._step)
     
-	<span class="pl-k">def</span> <span class="pl-en">_step</span>(<span class="pl-s1">self</span>, <span class="pl-s1">exc</span><span class="pl-c1">=</span><span class="pl-c1">None</span>):
-    <span class="pl-s1">coro</span> <span class="pl-c1">=</span> <span class="pl-s1">self</span>.<span class="pl-s1">_coro</span>
-    <span class="pl-k">try</span>:
-    	<span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-s1">coro</span>.<span class="pl-en">send</span>(<span class="pl-c1">None</span>)
-    <span class="pl-k">except</span> <span class="pl-v">StopIteration</span> <span class="pl-k">as</span> <span class="pl-s1">exc</span>:
-      <span class="pl-s1">self</span>.<span class="pl-en">set_result</span>(<span class="pl-s1">exc</span>.<span class="pl-s1">value</span>)
-    <span class="pl-k">else</span>:
-      <span class="pl-s1">result</span>.<span class="pl-en">add_done_callback</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_wakeup</span>)
+	def _step(self, exc=None):
+    coro = self._coro
+    try:
+    	result = coro.send(None)
+    except StopIteration as exc:
+      self.set_result(exc.value)
+    else:
+      result.add_done_callback(self._wakeup)
     
   
-  <span class="pl-k">def</span> <span class="pl-en">_wakeup</span>(<span class="pl-s1">self</span>, <span class="pl-s1">future</span>):
-    <span class="pl-s1">self</span>.<span class="pl-en">_step</span>()</pre></div>
+  def _wakeup(self, future):
+    self._step()
+</code></pre>
 </li>
 <li>
 <p>Handle</p>
-<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-c"># events.py</span>
-<span class="pl-k">class</span> <span class="pl-v">Handle</span>:
-    <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">callback</span>, <span class="pl-s1">args</span>, <span class="pl-s1">loop</span>):
-        <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span> <span class="pl-c1">=</span> <span class="pl-s1">loop</span>
-        <span class="pl-s1">self</span>.<span class="pl-s1">_callback</span> <span class="pl-c1">=</span> <span class="pl-s1">callback</span>
-        <span class="pl-s1">self</span>.<span class="pl-s1">_args</span> <span class="pl-c1">=</span> <span class="pl-s1">args</span>
+<pre lang="python" class="notranslate"><code class="notranslate"># events.py
+class Handle:
+    def __init__(self, callback, args, loop):
+        self._loop = loop
+        self._callback = callback
+        self._args = args
         
-		<span class="pl-k">def</span> <span class="pl-en">_run</span>(<span class="pl-s1">self</span>):
-      <span class="pl-s1">self</span>.<span class="pl-en">_callback</span>(<span class="pl-c1">*</span><span class="pl-s1">self</span>.<span class="pl-s1">_args</span>)
+		def _run(self):
+      self._callback(*self._args)
     
     
-<span class="pl-k">class</span> <span class="pl-v">TimerHandle</span>(<span class="pl-v">Handle</span>):
-    <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">when</span>, <span class="pl-s1">callback</span>, <span class="pl-s1">args</span>, <span class="pl-s1">loop</span>):
-        <span class="pl-k">assert</span> <span class="pl-s1">when</span> <span class="pl-c1">is</span> <span class="pl-c1">not</span> <span class="pl-c1">None</span>
-        <span class="pl-en">super</span>().<span class="pl-en">__init__</span>(<span class="pl-s1">callback</span>, <span class="pl-s1">args</span>, <span class="pl-s1">loop</span>)
-        <span class="pl-s1">self</span>.<span class="pl-s1">_when</span> <span class="pl-c1">=</span> <span class="pl-s1">when</span>
-        <span class="pl-s1">self</span>.<span class="pl-s1">_scheduled</span> <span class="pl-c1">=</span> <span class="pl-c1">False</span></pre></div>
+class TimerHandle(Handle):
+    def __init__(self, when, callback, args, loop):
+        assert when is not None
+        super().__init__(callback, args, loop)
+        self._when = when
+        self._scheduled = False
+</code></pre>
 </li>
 </ul>
 <h3>代码执行流程</h3>
-<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-k">import</span> <span class="pl-s1">asyncio</span>
+<pre lang="python" class="notranslate"><code class="notranslate">import asyncio
 
 
-<span class="pl-k">async</span> <span class="pl-k">def</span> <span class="pl-en">cor</span>():
-    <span class="pl-en">print</span>(<span class="pl-s">'enter cor ...'</span>)
-    <span class="pl-k">await</span> <span class="pl-s1">asyncio</span>.<span class="pl-en">sleep</span>(<span class="pl-c1">2</span>)
-    <span class="pl-en">print</span>(<span class="pl-s">'exit cor ...'</span>)
+async def cor():
+    print('enter cor ...')
+    await asyncio.sleep(2)
+    print('exit cor ...')
     
-    <span class="pl-k">return</span> <span class="pl-s">'cor'</span>
+    return 'cor'
 
-<span class="pl-s1">loop</span> <span class="pl-c1">=</span> <span class="pl-s1">asyncio</span>.<span class="pl-en">get_event_loop</span>()
-<span class="pl-s1">task</span> <span class="pl-c1">=</span> <span class="pl-s1">loop</span>.<span class="pl-en">create_task</span>(<span class="pl-en">cor</span>())
-<span class="pl-s1">rst</span> <span class="pl-c1">=</span> <span class="pl-s1">loop</span>.<span class="pl-en">run_until_complete</span>(<span class="pl-s1">task</span>)
-<span class="pl-en">print</span>(<span class="pl-s1">rst</span>)</pre></div>
-<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-k">class</span> <span class="pl-v">Task</span>(<span class="pl-s1">futures</span>.<span class="pl-v">Future</span>):
+loop = asyncio.get_event_loop()
+task = loop.create_task(cor())
+rst = loop.run_until_complete(task)
+print(rst)
+</code></pre>
+<pre lang="python" class="notranslate"><code class="notranslate">class Task(futures.Future):
     
     ...
     
-    <span class="pl-k">def</span> <span class="pl-en">_step</span>(<span class="pl-s1">self</span>, <span class="pl-s1">exc</span><span class="pl-c1">=</span><span class="pl-c1">None</span>):
-        <span class="pl-s">"""</span>
-<span class="pl-s">        _step方法可以看做是task包装的coroutine对象中的代码的直到yield的前半部分逻辑</span>
-<span class="pl-s">        """</span>
+    def _step(self, exc=None):
+        """
+        _step方法可以看做是task包装的coroutine对象中的代码的直到yield的前半部分逻辑
+        """
         ...
-        <span class="pl-k">try</span>:
-            <span class="pl-k">if</span> <span class="pl-s1">exc</span> <span class="pl-c1">is</span> <span class="pl-c1">None</span>:
+        try:
+            if exc is None:
                 
-                <span class="pl-c"># 1.关键代码</span>
-                <span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-s1">coro</span>.<span class="pl-en">send</span>(<span class="pl-c1">None</span>)
-            <span class="pl-k">else</span>:
-                <span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-s1">coro</span>.<span class="pl-en">throw</span>(<span class="pl-s1">exc</span>)
-        <span class="pl-c"># 2. coro执行完毕会抛出StopIteration异常</span>
-        <span class="pl-k">except</span> <span class="pl-v">StopIteration</span> <span class="pl-k">as</span> <span class="pl-s1">exc</span>:
-            <span class="pl-k">if</span> <span class="pl-s1">self</span>.<span class="pl-s1">_must_cancel</span>:
-                <span class="pl-c"># Task is cancelled right before coro stops.</span>
-                <span class="pl-s1">self</span>.<span class="pl-s1">_must_cancel</span> <span class="pl-c1">=</span> <span class="pl-c1">False</span>
-                <span class="pl-s1">self</span>.<span class="pl-en">set_exception</span>(<span class="pl-s1">futures</span>.<span class="pl-v">CancelledError</span>())
-            <span class="pl-k">else</span>:
-                <span class="pl-c"># result为None时，调用task的callbasks列表中的回调方法，在调用loop.run_until_complite，结束loop循环</span>
-                <span class="pl-s1">self</span>.<span class="pl-en">set_result</span>(<span class="pl-s1">exc</span>.<span class="pl-s1">value</span>)
-        <span class="pl-k">except</span> <span class="pl-s1">futures</span>.<span class="pl-v">CancelledError</span>:
-            <span class="pl-en">super</span>().<span class="pl-en">cancel</span>()  <span class="pl-c"># I.e., Future.cancel(self).</span>
-        <span class="pl-k">except</span> <span class="pl-v">Exception</span> <span class="pl-k">as</span> <span class="pl-s1">exc</span>:
-            <span class="pl-s1">self</span>.<span class="pl-en">set_exception</span>(<span class="pl-s1">exc</span>)
-        <span class="pl-k">except</span> <span class="pl-v">BaseException</span> <span class="pl-k">as</span> <span class="pl-s1">exc</span>:
-            <span class="pl-s1">self</span>.<span class="pl-en">set_exception</span>(<span class="pl-s1">exc</span>)
-            <span class="pl-k">raise</span>
-        <span class="pl-c"># 3. result = coro.send(None)不抛出异常</span>
-        <span class="pl-k">else</span>:
-            <span class="pl-c"># 4. 查看result是否含有_asyncio_future_blocking属性</span>
-            <span class="pl-s1">blocking</span> <span class="pl-c1">=</span> <span class="pl-en">getattr</span>(<span class="pl-s1">result</span>, <span class="pl-s">'_asyncio_future_blocking'</span>, <span class="pl-c1">None</span>)
-            <span class="pl-k">if</span> <span class="pl-s1">blocking</span> <span class="pl-c1">is</span> <span class="pl-c1">not</span> <span class="pl-c1">None</span>:
-                <span class="pl-c"># Yielded Future must come from Future.__iter__().</span>
-                <span class="pl-k">if</span> <span class="pl-s1">result</span>.<span class="pl-s1">_loop</span> <span class="pl-c1">is</span> <span class="pl-c1">not</span> <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>:
-                    <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(
-                        <span class="pl-s1">self</span>.<span class="pl-s1">_step</span>,
-                        <span class="pl-v">RuntimeError</span>(
-                            <span class="pl-s">'Task {!r} got Future {!r} attached to a '</span>
-                            <span class="pl-s">'different loop'</span>.<span class="pl-en">format</span>(<span class="pl-s1">self</span>, <span class="pl-s1">result</span>)))
+                # 1.关键代码
+                result = coro.send(None)
+            else:
+                result = coro.throw(exc)
+        # 2. coro执行完毕会抛出StopIteration异常
+        except StopIteration as exc:
+            if self._must_cancel:
+                # Task is cancelled right before coro stops.
+                self._must_cancel = False
+                self.set_exception(futures.CancelledError())
+            else:
+                # result为None时，调用task的callbasks列表中的回调方法，在调用loop.run_until_complite，结束loop循环
+                self.set_result(exc.value)
+        except futures.CancelledError:
+            super().cancel()  # I.e., Future.cancel(self).
+        except Exception as exc:
+            self.set_exception(exc)
+        except BaseException as exc:
+            self.set_exception(exc)
+            raise
+        # 3. result = coro.send(None)不抛出异常
+        else:
+            # 4. 查看result是否含有_asyncio_future_blocking属性
+            blocking = getattr(result, '_asyncio_future_blocking', None)
+            if blocking is not None:
+                # Yielded Future must come from Future.__iter__().
+                if result._loop is not self._loop:
+                    self._loop.call_soon(
+                        self._step,
+                        RuntimeError(
+                            'Task {!r} got Future {!r} attached to a '
+                            'different loop'.format(self, result)))
                 
-                <span class="pl-k">elif</span> <span class="pl-s1">blocking</span>:
-                    <span class="pl-k">if</span> <span class="pl-s1">result</span> <span class="pl-c1">is</span> <span class="pl-s1">self</span>:
-                        <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(
-                            <span class="pl-s1">self</span>.<span class="pl-s1">_step</span>,
-                            <span class="pl-v">RuntimeError</span>(
-                                <span class="pl-s">'Task cannot await on itself: {!r}'</span>.<span class="pl-en">format</span>(
-                                    <span class="pl-s1">self</span>)))
-                    <span class="pl-c"># 4.1. 如果result是一个future对象时，blocking会被设置成true</span>
-                    <span class="pl-k">else</span>:
-                        <span class="pl-s1">result</span>.<span class="pl-s1">_asyncio_future_blocking</span> <span class="pl-c1">=</span> <span class="pl-c1">False</span>
-                        <span class="pl-c"># 把_wakeup回调函数设置到此future对象中，当此future对象调用set_result()方法时，就会调用_wakeup方法</span>
-                        <span class="pl-s1">result</span>.<span class="pl-en">add_done_callback</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_wakeup</span>)
-                        <span class="pl-s1">self</span>.<span class="pl-s1">_fut_waiter</span> <span class="pl-c1">=</span> <span class="pl-s1">result</span>
-                        <span class="pl-k">if</span> <span class="pl-s1">self</span>.<span class="pl-s1">_must_cancel</span>:
-                            <span class="pl-k">if</span> <span class="pl-s1">self</span>.<span class="pl-s1">_fut_waiter</span>.<span class="pl-en">cancel</span>():
-                                <span class="pl-s1">self</span>.<span class="pl-s1">_must_cancel</span> <span class="pl-c1">=</span> <span class="pl-c1">False</span>
-                <span class="pl-k">else</span>:
-                    <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(
-                        <span class="pl-s1">self</span>.<span class="pl-s1">_step</span>,
-                        <span class="pl-v">RuntimeError</span>(
-                            <span class="pl-s">'yield was used instead of yield from '</span>
-                            <span class="pl-s">'in task {!r} with {!r}'</span>.<span class="pl-en">format</span>(<span class="pl-s1">self</span>, <span class="pl-s1">result</span>)))
-            <span class="pl-c"># 5. 如果result是None，则注册task._step到loop对象中去，在下一轮_run_once中被回调</span>
-            <span class="pl-k">elif</span> <span class="pl-s1">result</span> <span class="pl-c1">is</span> <span class="pl-c1">None</span>:
-                <span class="pl-c"># Bare yield relinquishes control for one event loop iteration.</span>
-                <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_step</span>)
+                elif blocking:
+                    if result is self:
+                        self._loop.call_soon(
+                            self._step,
+                            RuntimeError(
+                                'Task cannot await on itself: {!r}'.format(
+                                    self)))
+                    # 4.1. 如果result是一个future对象时，blocking会被设置成true
+                    else:
+                        result._asyncio_future_blocking = False
+                        # 把_wakeup回调函数设置到此future对象中，当此future对象调用set_result()方法时，就会调用_wakeup方法
+                        result.add_done_callback(self._wakeup)
+                        self._fut_waiter = result
+                        if self._must_cancel:
+                            if self._fut_waiter.cancel():
+                                self._must_cancel = False
+                else:
+                    self._loop.call_soon(
+                        self._step,
+                        RuntimeError(
+                            'yield was used instead of yield from '
+                            'in task {!r} with {!r}'.format(self, result)))
+            # 5. 如果result是None，则注册task._step到loop对象中去，在下一轮_run_once中被回调
+            elif result is None:
+                # Bare yield relinquishes control for one event loop iteration.
+                self._loop.call_soon(self._step)
 
-            <span class="pl-c"># --------下面的代码可以暂时不关注了--------</span>
-            <span class="pl-k">elif</span> <span class="pl-s1">inspect</span>.<span class="pl-en">isgenerator</span>(<span class="pl-s1">result</span>):
-                <span class="pl-c"># Yielding a generator is just wrong.</span>
-                <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(
-                    <span class="pl-s1">self</span>.<span class="pl-s1">_step</span>,
-                    <span class="pl-v">RuntimeError</span>(
-                        <span class="pl-s">'yield was used instead of yield from for '</span>
-                        <span class="pl-s">'generator in task {!r} with {}'</span>.<span class="pl-en">format</span>(
-                            <span class="pl-s1">self</span>, <span class="pl-s1">result</span>)))
-            <span class="pl-k">else</span>:
-                <span class="pl-c"># Yielding something else is an error.</span>
-                <span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>.<span class="pl-en">call_soon</span>(
-                    <span class="pl-s1">self</span>.<span class="pl-s1">_step</span>,
-                    <span class="pl-v">RuntimeError</span>(
-                        <span class="pl-s">'Task got bad yield: {!r}'</span>.<span class="pl-en">format</span>(<span class="pl-s1">result</span>)))
-        <span class="pl-k">finally</span>:
-            <span class="pl-s1">self</span>.<span class="pl-s1">__class__</span>.<span class="pl-s1">_current_tasks</span>.<span class="pl-en">pop</span>(<span class="pl-s1">self</span>.<span class="pl-s1">_loop</span>)
-            <span class="pl-s1">self</span> <span class="pl-c1">=</span> <span class="pl-c1">None</span>  <span class="pl-c"># Needed to break cycles when an exception occurs.</span>
+            # --------下面的代码可以暂时不关注了--------
+            elif inspect.isgenerator(result):
+                # Yielding a generator is just wrong.
+                self._loop.call_soon(
+                    self._step,
+                    RuntimeError(
+                        'yield was used instead of yield from for '
+                        'generator in task {!r} with {}'.format(
+                            self, result)))
+            else:
+                # Yielding something else is an error.
+                self._loop.call_soon(
+                    self._step,
+                    RuntimeError(
+                        'Task got bad yield: {!r}'.format(result)))
+        finally:
+            self.__class__._current_tasks.pop(self._loop)
+            self = None  # Needed to break cycles when an exception occurs.
 
-    <span class="pl-k">def</span> <span class="pl-en">_wakeup</span>(<span class="pl-s1">self</span>, <span class="pl-s1">future</span>):
-        <span class="pl-k">try</span>:
-            <span class="pl-s1">future</span>.<span class="pl-en">result</span>()
-        <span class="pl-k">except</span> <span class="pl-v">Exception</span> <span class="pl-k">as</span> <span class="pl-s1">exc</span>:
-            <span class="pl-c"># This may also be a cancellation.</span>
-            <span class="pl-s1">self</span>.<span class="pl-en">_step</span>(<span class="pl-s1">exc</span>)
-        <span class="pl-k">else</span>:
+    def _wakeup(self, future):
+        try:
+            future.result()
+        except Exception as exc:
+            # This may also be a cancellation.
+            self._step(exc)
+        else:
             
-            <span class="pl-c"># 这里是关键代码，上次的_step()执行到第一次碰到yield的地方挂住了，此时再次执行_step(),</span>
-            <span class="pl-c"># 也就是再次执行 result = coro.send(None) 这句代码，也就是从上次yield的地方继续执行yield后面的逻辑</span>
-            <span class="pl-s1">self</span>.<span class="pl-en">_step</span>()
-        <span class="pl-s1">self</span> <span class="pl-c1">=</span> <span class="pl-c1">None</span>  <span class="pl-c"># Needed to break cycles when an exception occurs.</span></pre></div>
+            # 这里是关键代码，上次的_step()执行到第一次碰到yield的地方挂住了，此时再次执行_step(),
+            # 也就是再次执行 result = coro.send(None) 这句代码，也就是从上次yield的地方继续执行yield后面的逻辑
+            self._step()
+        self = None  # Needed to break cycles when an exception occurs.
+</code></pre>
 <p><code class="notranslate">run_until_complete()</code> --&gt; <code class="notranslate">run_forever()</code> --&gt; <code class="notranslate">_run_once()</code>，重点看<code class="notranslate">_run_once</code>这个方法的执行</p>
 <p>此时:</p>
 <ul>
