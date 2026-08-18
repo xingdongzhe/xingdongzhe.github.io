@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html data-color-mode="light" data-dark-theme="dark" data-light-theme="light" lang="zh-CN">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link href='https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/Primer/21.0.7/primer.css' rel='stylesheet' />
+    
+    <link rel="icon" href="https://github.githubassets.com/favicons/favicon.svg"><script>
+        let theme = localStorage.getItem("meek_theme") || "light";
+        document.documentElement.setAttribute("data-color-mode", theme);
+    </script>
+<meta name="description" content="# Gmeek blog build troubleshooting
+
+> 一篇记录「重新开始维护 2 年没更新的 GitHub Pages 博客」完整排障过程的文章。">
+<meta property="og:title" content="gmeek blog build troubleshooting">
+<meta property="og:description" content="# Gmeek blog build troubleshooting
+
+> 一篇记录「重新开始维护 2 年没更新的 GitHub Pages 博客」完整排障过程的文章。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://xingdongzhe.github.io/post/gmeek%20blog%20build%20troubleshooting.html">
+<meta property="og:image" content="https://github.githubassets.com/favicons/favicon.svg">
+<title>gmeek blog build troubleshooting</title>
+<link href="//unpkg.com/@wooorm/starry-night@2.1.1/style/both.css" rel="stylesheet" />
+
+
+</head>
+<style>
+body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;padding: 45px;font-size: 16px;font-family: sans-serif;line-height: 1.25;}
+#header{display:flex;padding-bottom:8px;border-bottom: 1px solid var(--borderColor-muted, var(--color-border-muted));margin-bottom: 16px;}
+#footer {margin-top:64px; text-align: center;font-size: small;}
+
+</style>
+
+<style>
+.postTitle{margin: auto 0;font-size:40px;font-weight:bold;}
+.title-right{display:flex;margin:auto 0 0 auto;}
+.title-right .circle{padding: 14px 16px;margin-right:8px;}
+#postBody{border-bottom: 1px solid var(--color-border-default);padding-bottom:36px;}
+#postBody hr{height:2px;}
+#cmButton{height:48px;margin-top:48px;}
+#comments{margin-top:64px;}
+.g-emoji{font-size:24px;}
+@media (max-width: 600px) {
+    body {padding: 8px;}
+    .postTitle{font-size:24px;}
+}
+.copy-feedback {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 50px;
+    color: var(--color-fg-on-emphasis);
+    background-color: var(--color-fg-muted);
+    border-radius: 3px;
+    padding: 5px 8px;
+    font-size: 12px;
+}
+</style>
+
+
+
+
+<body>
+    <div id="header">
+<h1 class="postTitle">gmeek blog build troubleshooting</h1>
+<div class="title-right">
+    <a href="https://xingdongzhe.github.io" id="buttonHome" class="btn btn-invisible circle" title="首页">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathHome" fill-rule="evenodd"></path>
+        </svg>
+    </a>
+    
+    <a href="https://github.com/xingdongzhe/xingdongzhe.github.io/issues/4" target="_blank" class="btn btn-invisible circle" title="Issue">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathIssue" fill-rule="evenodd"></path>
+        </svg>
+    </a>
+    
+
+    <a class="btn btn-invisible circle" onclick="modeSwitch();" title="切换主题">
+        <svg class="octicon" width="16" height="16" >
+            <path id="themeSwitch" fill-rule="evenodd"></path>
+        </svg>
+    </a>
+
+</div>
+</div>
+    <div id="content">
+<div class="markdown-body" id="postBody"><h1>Gmeek blog build troubleshooting</h1>
+<blockquote>
+<p>一篇记录「重新开始维护 2 年没更新的 GitHub Pages 博客」完整排障过程的文章。踩了 4 个坑，其中一个是 GitHub Actions 的隐藏故障。</p>
+</blockquote>
+<h2>背景</h2>
+<p>我的博客（Gmeek 框架）最后更新停在 2024-03，之后一直没动。最近想发一篇新文章，结果发现：</p>
+<ol>
+<li>直接往 <code class="notranslate">backup/</code> 目录丢 Markdown → <strong>没用</strong>，构建时被删掉</li>
+<li>创建 Issue 发布文章 → <strong>没生成</strong>，Actions 一直排队</li>
+<li>手动触发 workflow → <strong>排队 30 分钟不分配 runner</strong></li>
+</ol>
+<p>整个过程像拆盲盒，最后发现根因是个"时间炸弹"。</p>
+<h2>先搞懂 Gmeek 的发布机制</h2>
+<p>Gmeek（<a href="https://github.com/Meekdai/Gmeek">Meekdai/Gmeek</a>）是一个基于 GitHub Issues 的静态博客框架，机制是：</p>
+<pre class="notranslate"><code class="notranslate">写 Issue（标题=文章标题，正文=文章内容）→ 触发 Actions → Gmeek.py 拉取 Issues 生成 HTML → 部署 Pages
+</code></pre>
+<ul>
+<li><strong>文章的真正来源是 GitHub Issues</strong>，不是仓库里的文件</li>
+<li><code class="notranslate">backup/</code> 目录是<strong>构建产物</strong>（Gmeek.py 从 Issue 同步下来的备份），构建时会先清空重建</li>
+<li><code class="notranslate">docs/</code> 是生成的静态页面</li>
+</ul>
+<p><strong>关键规则</strong>：Issue <strong>必须至少带一个 Label</strong>，Gmeek 的 <code class="notranslate">addOnePostJson()</code> 只处理 <code class="notranslate">len(issue.labels) &gt;= 1</code> 的 Issue，无标签的直接忽略。</p>
+<h2>坑 1：往 backup/ 丢文件 = 无效</h2>
+<p>我把写好的 Markdown 直接放进 <code class="notranslate">backup/</code> 并 push，以为这样就会变成文章。</p>
+<p>结果 Gmeek.py 的 <code class="notranslate">cleanFile()</code> 第一步就是：</p>
+<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-k">def</span> <span class="pl-en">cleanFile</span>(<span class="pl-s1">self</span>):
+    <span class="pl-k">if</span> <span class="pl-s1">os</span>.<span class="pl-c1">path</span>.<span class="pl-c1">exists</span>(<span class="pl-s1">self</span>.<span class="pl-c1">backup_dir</span>):
+        <span class="pl-s1">shutil</span>.<span class="pl-c1">rmtree</span>(<span class="pl-s1">self</span>.<span class="pl-c1">backup_dir</span>)  <span class="pl-c"># 直接删掉！</span>
+    <span class="pl-s1">os</span>.<span class="pl-c1">mkdir</span>(<span class="pl-s1">self</span>.<span class="pl-c1">backup_dir</span>)           <span class="pl-c"># 再重建空目录</span></pre></div>
+<p>我手工放的文件被当成垃圾清掉了。正确姿势是：<strong>文章写在 Issue 里</strong>，backup 是构建时自动生成的。</p>
+<h2>坑 2：无 Label 的 Issue 被静默忽略</h2>
+<p>创建了 Issue（标题、正文都正确），但忘了加 Label。GitHub Actions 触发了，但 Gmeek.py 遍历 Issues 时直接跳过：</p>
+<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-k">def</span> <span class="pl-en">addOnePostJson</span>(<span class="pl-s1">self</span>, <span class="pl-s1">issue</span>):
+    <span class="pl-k">if</span> <span class="pl-en">len</span>(<span class="pl-s1">issue</span>.<span class="pl-c1">labels</span>) <span class="pl-c1">&gt;=</span> <span class="pl-c1">1</span>:   <span class="pl-c"># 无标签 → 整个函数不执行</span>
+        ...</pre></div>
+<p>不报错、不警告，文章就是不出来。<strong>给 Issue 加上任意 Label 即可</strong>（Label 还会作为文章的分类标签显示在博客上）。</p>
+<h2>坑 3（重头戏）：Actions 永远排队，根因是 ubuntu-20.04</h2>
+<p>所有配置看起来都对，但 workflow 的 job <strong>永远卡在 queued</strong>，30 分钟不分配 runner。</p>
+<p>排查过程：</p>
+<ol>
+<li>检查 Pages 配置：<code class="notranslate">build_type: workflow</code> 正常</li>
+<li>检查 Actions 权限：<code class="notranslate">enabled: true</code> 正常</li>
+<li>检查其他仓库：x-python、pi-mono 的 Actions 都在正常运行 → 排除账户级问题</li>
+</ol>
+<p>最后怀疑到 workflow 文件里的 <code class="notranslate">runs-on: ubuntu-20.04</code>。一查发现：</p>
+<blockquote>
+<p><strong>GitHub 已于 2025-04-15 完全移除 Ubuntu 20.04 runner 镜像</strong>（<a href="https://github.com/actions/runner-images/issues/11101" data-hovercard-type="issue" data-hovercard-url="/actions/runner-images/issues/11101/hovercard">actions/runner-images#11101</a>）</p>
+</blockquote>
+<p>指定一个不存在的镜像，runner 永远不会分配，job 就无限排队。而我的 workflow 是 2024 年从模板创建的，从来没更新过。</p>
+<p><strong>修复</strong>：两处 <code class="notranslate">runs-on: ubuntu-20.04</code> → <code class="notranslate">ubuntu-24.04</code>。</p>
+<p>修复前后对比：</p>
+<markdown-accessiblity-table><table role="table">
+<thead>
+<tr>
+<th></th>
+<th>修复前</th>
+<th>修复后</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>runner 分配</td>
+<td>30 分钟+ 不分配</td>
+<td><strong>22 秒</strong></td>
+</tr>
+<tr>
+<td>job 状态</td>
+<td>queued 卡死</td>
+<td>in_progress → success</td>
+</tr>
+</tbody>
+</table></markdown-accessiblity-table>
+<p>顺带说一句：如果你的博客/项目也用 GitHub Actions 且很久没更新，检查一下 workflow 里的镜像版本。GitHub 对 <code class="notranslate">ubuntu-20.04</code>、<code class="notranslate">macos-12</code> 等旧镜像都执行过移除计划（N-1 支持策略），超过 2 年的 workflow 大概率中招。</p>
+<h2>备用方案：本地构建 Gmeek</h2>
+<p>在等 runner 的时候，我准备了一个不依赖 Actions 的备用方案——本地直接跑 Gmeek.py：</p>
+<div class="highlight highlight-source-shell"><pre class="notranslate"><span class="pl-c"><span class="pl-c">#</span> 1. 准备构建目录（模拟 Actions 工作区）</span>
+mkdir -p /tmp/gmeek-build
+cp -r <span class="pl-k">&lt;</span>仓库内容<span class="pl-k">&gt;</span> /tmp/gmeek-build/
+cp -r <span class="pl-k">&lt;</span>Gmeek源码<span class="pl-k">&gt;</span> /tmp/gmeek-build/
+
+<span class="pl-c"><span class="pl-c">#</span> 2. 安装依赖</span>
+pip install PyGithub requests xpinyin feedgen Jinja2 transliterate
+
+<span class="pl-c"><span class="pl-c">#</span> 3. 运行构建（需要 GITHUB_TOKEN 访问 Issues）</span>
+<span class="pl-k">export</span> GITHUB_WORKSPACE=/tmp/gmeek-build
+<span class="pl-c1">cd</span> /tmp/gmeek-build
+python Gmeek.py <span class="pl-k">&lt;</span>GITHUB_TOKEN<span class="pl-k">&gt;</span> <span class="pl-k">&lt;</span>owner<span class="pl-k">&gt;</span>/<span class="pl-k">&lt;</span>repo<span class="pl-k">&gt;</span> --issue_number <span class="pl-s"><span class="pl-pds">'</span>0<span class="pl-pds">'</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> 4. 把产物拷回仓库提交</span>
+cp -a docs backup blogBase.json <span class="pl-k">&lt;</span>仓库<span class="pl-k">&gt;</span>/</pre></div>
+<p>关键点：Gmeek.py 的 <code class="notranslate">cleanFile()</code> 依赖 <code class="notranslate">GITHUB_WORKSPACE</code> 环境变量（Actions 里自动有，本地要手动 export），否则会报错。</p>
+<p>这个方案验证了「构建逻辑本身没问题，纯粹是 runner 的问题」，也帮我提前拿到了构建产物。</p>
+<h2>坑 4：中文标题的 URL 会很难看</h2>
+<p>Gmeek 默认 <code class="notranslate">urlMode: "pinyin"</code>，中文标题会被转拼音生成文件名。中英混排的标题转出来很乱：</p>
+<pre class="notranslate"><code class="notranslate">pi agent -duo-mo-xing-jie-ru-shi-zhan-：-guan-fang- API -yu-gong-si-wang-guan-shuang- provider -pei-zhi.html
+</code></pre>
+<p>（全角冒号都没清理）</p>
+<p>而英文标题的 URL 就很干净：<code class="notranslate">pi agent multi-provider deepseek config.html</code>。</p>
+<p><strong>建议</strong>：Issue 标题用英文（或全中文 + 纯空格结构），正文内容用中文不受影响。</p>
+<h2>总结</h2>
+<pre class="notranslate"><code class="notranslate">文章 = Issue（必须带 Label）          ← Gmeek 的文章机制
+backup/ 是构建产物，不是文章源        ← 别往里丢文件
+ubuntu-20.04 已死（2025-04）         ← Actions 排队的隐藏根因
+本地跑 Gmeek.py 可绕过 Actions       ← 备用方案
+英文标题 → 干净 URL                  ← 发布前想好标题
+</code></pre>
+<p>一次"发文章"的小事，牵出了 4 个坑，其中 <code class="notranslate">ubuntu-20.04</code> 这个坑属于"GitHub 删了旧镜像但你不知道"的典型时间炸弹。如果你的 GitHub Actions 突然开始无限排队，先查 <code class="notranslate">runs-on</code> 是不是用了已移除的镜像。</p></div>
+<div style="font-size:small;margin-top:8px;float:right;"></div>
+
+<button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
+<div class="comments" id="comments"></div>
+
+</div>
+    <div id="footer"><div id="footer1">Copyright © <span id="copyrightYear"></span> <a href="https://xingdongzhe.github.io">xingdongzhe's blog</a></div>
+<div id="footer2">
+    <span id="runday"></span><span>Powered by <a href="https://meekdai.com/Gmeek.html" target="_blank">Gmeek</a></span>
+</div>
+
+<script>
+var now=new Date();
+document.getElementById("copyrightYear").innerHTML=now.getFullYear();
+
+if(""!=""){
+    var startSite=new Date("");
+    var diff=now.getTime()-startSite.getTime();
+    var diffDay=Math.floor(diff/(1000*60*60*24));
+    document.getElementById("runday").innerHTML="网站运行 "+diffDay+" 天"+" • ";
+}
+</script></div>
+</body>
+<script>
+var IconList={'sun': 'M8 10.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM8 12a4 4 0 100-8 4 4 0 000 8zM8 0a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V.75A.75.75 0 018 0zm0 13a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 13zM2.343 2.343a.75.75 0 011.061 0l1.06 1.061a.75.75 0 01-1.06 1.06l-1.06-1.06a.75.75 0 010-1.06zm9.193 9.193a.75.75 0 011.06 0l1.061 1.06a.75.75 0 01-1.06 1.061l-1.061-1.06a.75.75 0 010-1.061zM16 8a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0116 8zM3 8a.75.75 0 01-.75.75H.75a.75.75 0 010-1.5h1.5A.75.75 0 013 8zm10.657-5.657a.75.75 0 010 1.061l-1.061 1.06a.75.75 0 11-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zm-9.193 9.193a.75.75 0 010 1.06l-1.06 1.061a.75.75 0 11-1.061-1.06l1.06-1.061a.75.75 0 011.061 0z', 'moon': 'M9.598 1.591a.75.75 0 01.785-.175 7 7 0 11-8.967 8.967.75.75 0 01.961-.96 5.5 5.5 0 007.046-7.046.75.75 0 01.175-.786zm1.616 1.945a7 7 0 01-7.678 7.678 5.5 5.5 0 107.678-7.678z', 'sync': 'M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z', 'home': 'M6.906.664a1.749 1.749 0 0 1 2.187 0l5.25 4.2c.415.332.657.835.657 1.367v7.019A1.75 1.75 0 0 1 13.25 15h-3.5a.75.75 0 0 1-.75-.75V9H7v5.25a.75.75 0 0 1-.75.75h-3.5A1.75 1.75 0 0 1 1 13.25V6.23c0-.531.242-1.034.657-1.366l5.25-4.2Zm1.25 1.171a.25.25 0 0 0-.312 0l-5.25 4.2a.25.25 0 0 0-.094.196v7.019c0 .138.112.25.25.25H5.5V8.25a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v5.25h2.75a.25.25 0 0 0 .25-.25V6.23a.25.25 0 0 0-.094-.195Z', 'github': 'M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z', 'copy': 'M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z', 'check': 'M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z'};
+var utterancesLoad=0;
+
+let themeSettings={
+    "dark": ["dark","moon","#00f0ff","dark-blue"],
+    "light": ["light","sun","#ff5000","github-light"],
+    "auto": ["auto","sync","","preferred-color-scheme"]
+};
+function changeTheme(mode, icon, color, utheme){
+    document.documentElement.setAttribute("data-color-mode",mode);
+    document.getElementById("themeSwitch").setAttribute("d",value=IconList[icon]);
+    document.getElementById("themeSwitch").parentNode.style.color=color;
+    if(utterancesLoad==1){utterancesTheme(utheme);}
+}
+function modeSwitch(){
+    let currentMode=document.documentElement.getAttribute('data-color-mode');
+    let newMode = currentMode === "light" ? "dark" : currentMode === "dark" ? "auto" : "light";
+    localStorage.setItem("meek_theme", newMode);
+    if(themeSettings[newMode]){
+        changeTheme(...themeSettings[newMode]);
+    }
+}
+function utterancesTheme(theme){
+    const message={type:'set-theme',theme: theme};
+    const iframe=document.getElementsByClassName('utterances-frame')[0];
+    iframe.contentWindow.postMessage(message,'https://utteranc.es');
+}
+if(themeSettings[theme]){changeTheme(...themeSettings[theme]);}
+console.log("\n %c Gmeek last https://github.com/Meekdai/Gmeek \n","padding:5px 0;background:#02d81d;color:#fff");
+</script>
+
+<script>
+document.getElementById("pathHome").setAttribute("d",IconList["home"]);
+document.getElementById("pathIssue").setAttribute("d",IconList["github"]);
+
+
+
+function openComments(){
+    cm=document.getElementById("comments");
+    cmButton=document.getElementById("cmButton");
+    cmButton.disabled=true;
+    cmButton.innerHTML="loading";
+    span=document.createElement("span");
+    span.setAttribute("class","AnimatedEllipsis");
+    cmButton.appendChild(span);
+
+    script=document.createElement("script");
+    script.setAttribute("src","https://utteranc.es/client.js");
+    script.setAttribute("repo","xingdongzhe/xingdongzhe.github.io");
+    script.setAttribute("issue-term","title");
+    
+    if(localStorage.getItem("meek_theme")=="dark"){script.setAttribute("theme","dark-blue");}
+    else if(localStorage.getItem("meek_theme")=="light") {script.setAttribute("theme","github-light");}
+    else{script.setAttribute("theme","preferred-color-scheme");}
+    
+    script.setAttribute("crossorigin","anonymous");
+    script.setAttribute("async","");
+    cm.appendChild(script);
+
+    int=self.setInterval("iFrameLoading()",200);
+}
+
+function iFrameLoading(){
+    var utterances=document.getElementsByClassName('utterances');
+    if(utterances.length==1){
+        if(utterances[0].style.height!=""){
+            utterancesLoad=1;
+            int=window.clearInterval(int);
+            document.getElementById("cmButton").style.display="none";
+            console.log("utterances Load OK");
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const createClipboardHTML = (codeContent, additionalClasses = '') => `
+        <pre class="notranslate"><code class="notranslate">${codeContent}</code></pre>
+        <div class="clipboard-container position-absolute right-0 top-0 ${additionalClasses}">
+            <clipboard-copy class="ClipboardButton btn m-2 p-0" role="button" style="display: inherit;">
+                <svg height="16" width="16" class="octicon octicon-copy m-2"><path d="${IconList["copy"]}"></path></svg>
+                <svg height="16" width="16" class="octicon octicon-check color-fg-success m-2 d-none"><path d="${IconList["check"]}"></path></svg>
+            </clipboard-copy>
+            <div class="copy-feedback">Copied!</div>
+        </div>
+    `;
+
+    const handleCodeElements = (selector = '') => {
+        document.querySelectorAll(selector).forEach(codeElement => {
+            const codeContent = codeElement.innerHTML;
+            const newStructure = document.createElement('div');
+            newStructure.className = 'snippet-clipboard-content position-relative overflow-auto';
+            newStructure.innerHTML = createClipboardHTML(codeContent);
+
+            const parentElement = codeElement.parentElement;
+            if (selector.includes('highlight')) {
+                parentElement.insertBefore(newStructure, codeElement.nextSibling);
+                parentElement.removeChild(codeElement);
+            } else {
+                parentElement.parentElement.replaceChild(newStructure, parentElement);
+            }
+        });
+    };
+
+    handleCodeElements('pre.notranslate > code.notranslate');
+    handleCodeElements('div.highlight > pre.notranslate');
+
+    let currentFeedback = null;
+    document.querySelectorAll('clipboard-copy').forEach(copyButton => {
+        copyButton.addEventListener('click', () => {
+            const codeContent = copyButton.closest('.snippet-clipboard-content').innerText;
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = codeContent;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempTextArea);
+
+            const copyIcon = copyButton.querySelector('.octicon-copy');
+            const checkIcon = copyButton.querySelector('.octicon-check');
+            const copyFeedback = copyButton.nextElementSibling;
+
+            if (currentFeedback && currentFeedback !== copyFeedback) {currentFeedback.style.display = 'none';}
+            currentFeedback = copyFeedback;
+
+            copyIcon.classList.add('d-none');
+            checkIcon.classList.remove('d-none');
+            copyFeedback.style.display = 'block';
+            copyButton.style.borderColor = 'var(--color-success-fg)';
+
+            setTimeout(() => {
+                copyIcon.classList.remove('d-none');
+                checkIcon.classList.add('d-none');
+                copyFeedback.style.display = 'none';
+                copyButton.style.borderColor = '';
+            }, 2000);
+        });
+    });
+});
+
+</script>
+
+
+</html>
