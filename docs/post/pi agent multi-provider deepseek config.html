@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html data-color-mode="light" data-dark-theme="dark" data-light-theme="light" lang="zh-CN">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link href='https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/Primer/21.0.7/primer.css' rel='stylesheet' />
+    
+    <link rel="icon" href="https://github.githubassets.com/favicons/favicon.svg"><script>
+        let theme = localStorage.getItem("meek_theme") || "light";
+        document.documentElement.setAttribute("data-color-mode", theme);
+    </script>
+<meta name="description" content="# pi agent 多模型接入实战：官方 API 与公司网关双 provider 配置
+
+> 场景：同一个模型（DeepSeek V4），既有官方直连 API，又有公司搭建的内部网关，如何在 pi 中同时接入并区分使用。">
+<meta property="og:title" content="pi agent multi-provider deepseek config">
+<meta property="og:description" content="# pi agent 多模型接入实战：官方 API 与公司网关双 provider 配置
+
+> 场景：同一个模型（DeepSeek V4），既有官方直连 API，又有公司搭建的内部网关，如何在 pi 中同时接入并区分使用。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://xingdongzhe.github.io/post/pi%20agent%20multi-provider%20deepseek%20config.html">
+<meta property="og:image" content="https://github.githubassets.com/favicons/favicon.svg">
+<title>pi agent multi-provider deepseek config</title>
+<link href="//unpkg.com/@wooorm/starry-night@2.1.1/style/both.css" rel="stylesheet" />
+
+
+</head>
+<style>
+body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;padding: 45px;font-size: 16px;font-family: sans-serif;line-height: 1.25;}
+#header{display:flex;padding-bottom:8px;border-bottom: 1px solid var(--borderColor-muted, var(--color-border-muted));margin-bottom: 16px;}
+#footer {margin-top:64px; text-align: center;font-size: small;}
+
+</style>
+
+<style>
+.postTitle{margin: auto 0;font-size:40px;font-weight:bold;}
+.title-right{display:flex;margin:auto 0 0 auto;}
+.title-right .circle{padding: 14px 16px;margin-right:8px;}
+#postBody{border-bottom: 1px solid var(--color-border-default);padding-bottom:36px;}
+#postBody hr{height:2px;}
+#cmButton{height:48px;margin-top:48px;}
+#comments{margin-top:64px;}
+.g-emoji{font-size:24px;}
+@media (max-width: 600px) {
+    body {padding: 8px;}
+    .postTitle{font-size:24px;}
+}
+.copy-feedback {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 50px;
+    color: var(--color-fg-on-emphasis);
+    background-color: var(--color-fg-muted);
+    border-radius: 3px;
+    padding: 5px 8px;
+    font-size: 12px;
+}
+</style>
+
+
+
+
+<body>
+    <div id="header">
+<h1 class="postTitle">pi agent multi-provider deepseek config</h1>
+<div class="title-right">
+    <a href="https://xingdongzhe.github.io" id="buttonHome" class="btn btn-invisible circle" title="首页">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathHome" fill-rule="evenodd"></path>
+        </svg>
+    </a>
+    
+    <a href="https://github.com/xingdongzhe/xingdongzhe.github.io/issues/3" target="_blank" class="btn btn-invisible circle" title="Issue">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathIssue" fill-rule="evenodd"></path>
+        </svg>
+    </a>
+    
+
+    <a class="btn btn-invisible circle" onclick="modeSwitch();" title="切换主题">
+        <svg class="octicon" width="16" height="16" >
+            <path id="themeSwitch" fill-rule="evenodd"></path>
+        </svg>
+    </a>
+
+</div>
+</div>
+    <div id="content">
+<div class="markdown-body" id="postBody"><h1>pi agent 多模型接入实战：官方 API 与公司网关双 provider 配置</h1>
+<blockquote>
+<p>场景：同一个模型（DeepSeek V4），既有官方直连 API，又有公司搭建的内部网关，如何在 pi 中同时接入并区分使用。</p>
+</blockquote>
+<h2>背景</h2>
+<p>我在用 pi（终端 AI 编程助手）时遇到一个问题：DeepSeek V4 有两个访问渠道——</p>
+<ol>
+<li><strong>官方 API</strong>：<code class="notranslate">https://api.deepseek.com/v1</code>，用自己的 key 直连</li>
+<li><strong>公司网关</strong>：公司内部搭建的 OpenAI 兼容网关（OneAPI/NewAPI 类），用公司分配的 key</li>
+</ol>
+<p>如果只是往同一个 provider 里塞两个模型，<code class="notranslate">/model</code> 选择器里会显示两条一模一样的 <code class="notranslate">deepseek/deepseek-v4-pro</code>，根本分不清哪条走官方、哪条走公司网关。</p>
+<h2>核心思路：模型标识是 <code class="notranslate">provider/model-id</code></h2>
+<p>pi 里每个模型的全量标识是 <strong><code class="notranslate">provider/model-id</code></strong>。所以区分两个来源的正确做法是：</p>
+<blockquote>
+<p><strong>建两个 provider，各自指向不同的 baseUrl</strong>，而不是往同一个 provider 里塞两个模型。</p>
+</blockquote>
+<pre class="notranslate"><code class="notranslate">deepseek/deepseek-v4-pro     ← 官方直连
+deepseek-aku/deepseek-v4-flash  ← 公司网关
+</code></pre>
+<p>这样 <code class="notranslate">/model</code> 选择器按 provider 分组显示，一眼就能分辨。</p>
+<h2>配置文件</h2>
+<p>pi 的自定义模型配置在两个文件：</p>
+<markdown-accessiblity-table><table role="table">
+<thead>
+<tr>
+<th>文件</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code class="notranslate">~/.pi/agent/models.json</code></td>
+<td>定义 providers 和 models（模型、baseUrl、thinking 配置等）</td>
+</tr>
+<tr>
+<td><code class="notranslate">~/.pi/agent/auth.json</code></td>
+<td>集中管理 API key，按 provider 名匹配</td>
+</tr>
+</tbody>
+</table></markdown-accessiblity-table>
+<h2>双 provider 配置示例</h2>
+<h3><code class="notranslate">~/.pi/agent/models.json</code></h3>
+<div class="highlight highlight-source-json"><pre class="notranslate">{
+  <span class="pl-ent">"providers"</span>: {
+    <span class="pl-ent">"deepseek"</span>: {
+      <span class="pl-ent">"baseUrl"</span>: <span class="pl-s"><span class="pl-pds">"</span>https://api.deepseek.com/v1<span class="pl-pds">"</span></span>,
+      <span class="pl-ent">"modelOverrides"</span>: {
+        <span class="pl-ent">"deepseek-v4-pro"</span>: {
+          <span class="pl-ent">"reasoning"</span>: <span class="pl-c1">true</span>,
+          <span class="pl-ent">"thinkingLevelMap"</span>: {
+            <span class="pl-ent">"minimal"</span>: <span class="pl-s"><span class="pl-pds">"</span>low<span class="pl-pds">"</span></span>,
+            <span class="pl-ent">"low"</span>: <span class="pl-s"><span class="pl-pds">"</span>low<span class="pl-pds">"</span></span>,
+            <span class="pl-ent">"medium"</span>: <span class="pl-s"><span class="pl-pds">"</span>medium<span class="pl-pds">"</span></span>,
+            <span class="pl-ent">"high"</span>: <span class="pl-s"><span class="pl-pds">"</span>high<span class="pl-pds">"</span></span>,
+            <span class="pl-ent">"xhigh"</span>: <span class="pl-s"><span class="pl-pds">"</span>max<span class="pl-pds">"</span></span>,
+            <span class="pl-ent">"max"</span>: <span class="pl-s"><span class="pl-pds">"</span>max<span class="pl-pds">"</span></span>
+          },
+          <span class="pl-ent">"compat"</span>: {
+            <span class="pl-ent">"thinkingFormat"</span>: <span class="pl-s"><span class="pl-pds">"</span>deepseek<span class="pl-pds">"</span></span>
+          }
+        }
+      }
+    },
+    <span class="pl-ent">"deepseek-aku"</span>: {
+      <span class="pl-ent">"baseUrl"</span>: <span class="pl-s"><span class="pl-pds">"</span>https://deepseek.akusre.com/v1<span class="pl-pds">"</span></span>,
+      <span class="pl-ent">"api"</span>: <span class="pl-s"><span class="pl-pds">"</span>openai-completions<span class="pl-pds">"</span></span>,
+      <span class="pl-ent">"models"</span>: [
+        {
+          <span class="pl-ent">"id"</span>: <span class="pl-s"><span class="pl-pds">"</span>deepseek-v4-flash<span class="pl-pds">"</span></span>,
+          <span class="pl-ent">"name"</span>: <span class="pl-s"><span class="pl-pds">"</span>DS V4 Flash (公司网关)<span class="pl-pds">"</span></span>,
+          <span class="pl-ent">"reasoning"</span>: <span class="pl-c1">true</span>,
+          <span class="pl-ent">"input"</span>: [<span class="pl-s"><span class="pl-pds">"</span>text<span class="pl-pds">"</span></span>],
+          <span class="pl-ent">"thinkingLevelMap"</span>: {
+            <span class="pl-ent">"minimal"</span>: <span class="pl-s"><span class="pl-pds">"</span>low<span class="pl-pds">"</span></span>,
+            <span class="pl-ent">"low"</span>: <span class="pl-s"><span class="pl-pds">"</span>low<span class="pl-pds">"</span></span>,
+            <span class="pl-ent">"medium"</span>: <span class="pl-s"><span class="pl-pds">"</span>medium<span class="pl-pds">"</span></span>,
+            <span class="pl-ent">"high"</span>: <span class="pl-s"><span class="pl-pds">"</span>high<span class="pl-pds">"</span></span>,
+            <span class="pl-ent">"xhigh"</span>: <span class="pl-s"><span class="pl-pds">"</span>max<span class="pl-pds">"</span></span>,
+            <span class="pl-ent">"max"</span>: <span class="pl-s"><span class="pl-pds">"</span>max<span class="pl-pds">"</span></span>
+          },
+          <span class="pl-ent">"compat"</span>: {
+            <span class="pl-ent">"thinkingFormat"</span>: <span class="pl-s"><span class="pl-pds">"</span>deepseek<span class="pl-pds">"</span></span>
+          }
+        }
+      ]
+    }
+  }
+}</pre></div>
+<h3><code class="notranslate">~/.pi/agent/auth.json</code></h3>
+<div class="highlight highlight-source-json"><pre class="notranslate">{
+  <span class="pl-ent">"deepseek"</span>: {
+    <span class="pl-ent">"type"</span>: <span class="pl-s"><span class="pl-pds">"</span>api_key<span class="pl-pds">"</span></span>,
+    <span class="pl-ent">"key"</span>: <span class="pl-s"><span class="pl-pds">"</span>sk-官方key<span class="pl-pds">"</span></span>
+  },
+  <span class="pl-ent">"deepseek-aku"</span>: {
+    <span class="pl-ent">"type"</span>: <span class="pl-s"><span class="pl-pds">"</span>api_key<span class="pl-pds">"</span></span>,
+    <span class="pl-ent">"key"</span>: <span class="pl-s"><span class="pl-pds">"</span>sk-公司网关key<span class="pl-pds">"</span></span>
+  }
+}</pre></div>
+<p>key 按 provider 名自动匹配，互不干扰。</p>
+<h2>踩过的 4 个坑</h2>
+<h3>1. <code class="notranslate">modelOverrides</code> 只对内置 provider 生效</h3>
+<p>官方 <code class="notranslate">deepseek</code> 是 pi 内置 provider，用 <code class="notranslate">modelOverrides</code> 覆盖模型配置即可。但<strong>公司网关是新 provider，<code class="notranslate">modelOverrides</code> 对它不生效</strong>，必须内联 <code class="notranslate">models</code> 数组，并且手动带上 <code class="notranslate">thinkingFormat: "deepseek"</code> 等 thinking 配置。</p>
+<h3>2. <code class="notranslate">api</code> 字段是协议类型，不是 URL 路径</h3>
+<p>一开始我把公司网关配成了：</p>
+<div class="highlight highlight-source-json"><pre class="notranslate"><span class="pl-ent">"api"</span>: <span class="pl-s"><span class="pl-pds">"</span>/v1/chat/completions<span class="pl-pds">"</span></span>   <span class="pl-ii">// ❌ 错</span></pre></div>
+<p><code class="notranslate">api</code> 字段表示<strong>协议类型</strong>，合法值是 <code class="notranslate">openai-completions</code> 等（OpenAI 兼容接口就写这个）。填路径会导致 provider 无法加载。</p>
+<h3>3. <code class="notranslate">baseUrl</code> 要带 <code class="notranslate">/v1</code> 路径前缀</h3>
+<p>公司网关地址如果是 <code class="notranslate">https://deepseek.akusre.com</code>，<code class="notranslate">baseUrl</code> 要写成 <code class="notranslate">https://deepseek.akusre.com/v1</code>，否则请求拼出来是 <code class="notranslate">.../chat/completions</code>（少了 <code class="notranslate">/v1</code>）直接 404。</p>
+<h3>4. 模型 id 用网关暴露的名字，不要猜</h3>
+<p>公司网关是 OneAPI/NewAPI 类，模型名由网关管理员配置（可能和官方名字不同）。<strong>不要猜</strong>，用网关 <code class="notranslate">/v1/models</code> 返回的 <code class="notranslate">id</code>。不过很多网关不暴露 <code class="notranslate">/v1/models</code> 端点（返回 404），那就直接问管理员或在网关管理后台查。</p>
+<h2>网关探测技巧</h2>
+<p>填 key 之前，可以先裸探测网关格式是否 OpenAI 兼容：</p>
+<div class="highlight highlight-source-shell"><pre class="notranslate">curl -s -o /dev/null -w <span class="pl-s"><span class="pl-pds">"</span>%{http_code}<span class="pl-pds">"</span></span> -X POST https://deepseek.akusre.com/v1/chat/completions \
+  -H <span class="pl-s"><span class="pl-pds">"</span>Authorization: Bearer test<span class="pl-pds">"</span></span> \
+  -H <span class="pl-s"><span class="pl-pds">"</span>Content-Type: application/json<span class="pl-pds">"</span></span> \
+  -d <span class="pl-s"><span class="pl-pds">'</span>{"model":"x","messages":[]}<span class="pl-pds">'</span></span></pre></div>
+<markdown-accessiblity-table><table role="table">
+<thead>
+<tr>
+<th>返回码</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code class="notranslate">401</code></td>
+<td>端点存在且是 OpenAI 兼容格式，只是 key 无效 → baseUrl 配置正确</td>
+</tr>
+<tr>
+<td><code class="notranslate">404</code></td>
+<td>路径不对，或网关不暴露该端点</td>
+</tr>
+<tr>
+<td><code class="notranslate">200</code></td>
+<td>通了（不太可能，因为 key 是假的）</td>
+</tr>
+</tbody>
+</table></markdown-accessiblity-table>
+<p>我实测的结果：<code class="notranslate">POST /v1/chat/completions</code> → 401（端点存在），<code class="notranslate">/v1/models</code> → 404（不暴露模型列表）。</p>
+<h2>thinkingLevelMap 详解</h2>
+<p>DeepSeek 是推理模型，思考级别映射是配置里的重头戏。</p>
+<h3>pi 的 7 个思考级别</h3>
+<pre class="notranslate"><code class="notranslate">off | minimal | low | medium | high | xhigh | max
+</code></pre>
+<p>由弱到强，排序的量化证据是 settings.json 里的 <code class="notranslate">thinkingBudgets</code>（token 预算严格递增）：</p>
+<markdown-accessiblity-table><table role="table">
+<thead>
+<tr>
+<th>级别</th>
+<th>budget</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>minimal</td>
+<td>1024</td>
+</tr>
+<tr>
+<td>low</td>
+<td>4096</td>
+</tr>
+<tr>
+<td>medium</td>
+<td>10240</td>
+</tr>
+<tr>
+<td>high</td>
+<td>32768</td>
+</tr>
+<tr>
+<td>xhigh</td>
+<td>65536</td>
+</tr>
+<tr>
+<td>max</td>
+<td>131072</td>
+</tr>
+</tbody>
+</table></markdown-accessiblity-table>
+<h3>字段迁移：<code class="notranslate">reasoningEffortMap</code> → <code class="notranslate">thinkingLevelMap</code></h3>
+<p>旧配置用 <code class="notranslate">compat.reasoningEffortMap</code>，新版已迁移到<strong>模型顶层</strong>的 <code class="notranslate">thinkingLevelMap</code>：</p>
+<div class="highlight highlight-source-json"><pre class="notranslate">{
+  <span class="pl-ent">"reasoning"</span>: <span class="pl-c1">true</span>,
+  <span class="pl-ent">"thinkingLevelMap"</span>: {
+    <span class="pl-ent">"minimal"</span>: <span class="pl-s"><span class="pl-pds">"</span>low<span class="pl-pds">"</span></span>,
+    <span class="pl-ent">"low"</span>: <span class="pl-s"><span class="pl-pds">"</span>low<span class="pl-pds">"</span></span>,
+    <span class="pl-ent">"medium"</span>: <span class="pl-s"><span class="pl-pds">"</span>medium<span class="pl-pds">"</span></span>,
+    <span class="pl-ent">"high"</span>: <span class="pl-s"><span class="pl-pds">"</span>high<span class="pl-pds">"</span></span>,
+    <span class="pl-ent">"xhigh"</span>: <span class="pl-s"><span class="pl-pds">"</span>max<span class="pl-pds">"</span></span>,
+    <span class="pl-ent">"max"</span>: <span class="pl-s"><span class="pl-pds">"</span>max<span class="pl-pds">"</span></span>
+  },
+  <span class="pl-ent">"compat"</span>: { <span class="pl-ent">"thinkingFormat"</span>: <span class="pl-s"><span class="pl-pds">"</span>deepseek<span class="pl-pds">"</span></span> }
+}</pre></div>
+<p>map 的 key 是 pi 的思考级别，value 是<strong>发送给 provider 的字符串</strong>。用 <code class="notranslate">null</code> 表示该级别不支持（UI 里隐藏、循环切换时跳过）。</p>
+<h3>省略语义（容易误解）</h3>
+<p><code class="notranslate">thinkingLevelMap</code> 里<strong>没写的 key</strong> 意味着：</p>
+<ul>
+<li><code class="notranslate">high</code> 及以下级别 → 走 provider 默认映射</li>
+<li><code class="notranslate">xhigh</code> 和 <code class="notranslate">max</code> → <strong>不支持</strong>（隐藏、切换时跳过/clamp）</li>
+</ul>
+<p>所以如果想让 <code class="notranslate">max</code> 级别可选，必须显式配置 <code class="notranslate">"max": "max"</code> 或保守的 <code class="notranslate">"max": "high"</code>。</p>
+<h3>DeepSeek 官方 <code class="notranslate">reasoning_effort</code> 枚举</h3>
+<p><code class="notranslate">thinkingFormat: "deepseek"</code> 会向 API 发送 <code class="notranslate">thinking: { type: "enabled" | "disabled" }</code> + <code class="notranslate">reasoning_effort</code>，pi 侧不做校验，map 里 value 是什么就原样发。DeepSeek 官方接口的枚举是：</p>
+<pre class="notranslate"><code class="notranslate">low | medium | high
+</code></pre>
+<p>注意：<strong><code class="notranslate">max</code> 不在官方枚举里</strong>。配置 <code class="notranslate">"xhigh": "max"</code> / <code class="notranslate">"max": "max"</code> 时，官方 API 严格校验会报参数错误（不校验则可能被忽略/降级）。公司网关通常是透传，接受值取决于网关配置——先按官方枚举配，报错再问网关管理员。我的实测是官方 API 6 个级别全部正常响应，<code class="notranslate">max</code> 也被接受。</p>
+<h2>验证</h2>
+<h3>1. 检查模型加载</h3>
+<div class="highlight highlight-source-shell"><pre class="notranslate">pi --list-models</pre></div>
+<p>输出确认两个 provider 都正常加载：</p>
+<pre class="notranslate"><code class="notranslate">deepseek      deepseek-v4-flash  1M       384K     yes       no
+deepseek      deepseek-v4-pro    1M       384K     yes       no
+deepseek-aku  deepseek-v4-flash  128K     16.4K    yes       no
+</code></pre>
+<h3>2. 全思考级别测试</h3>
+<div class="highlight highlight-source-shell"><pre class="notranslate">pi -p <span class="pl-s"><span class="pl-pds">"</span>回复OK两个字<span class="pl-pds">"</span></span> --model deepseek/deepseek-v4-pro --thinking off
+pi -p <span class="pl-s"><span class="pl-pds">"</span>回复OK两个字<span class="pl-pds">"</span></span> --model deepseek/deepseek-v4-pro --thinking low
+<span class="pl-c"><span class="pl-c">#</span> ... medium / high / xhigh / max</span></pre></div>
+<p>实测 6 个级别全部通过，<code class="notranslate">xhigh</code>/<code class="notranslate">max</code> 发送 <code class="notranslate">"max"</code> 到 DeepSeek API 均正常处理。</p>
+<h2>设置默认模型</h2>
+<p>临时指定用 <code class="notranslate">--model</code>，永久默认改 <code class="notranslate">~/.pi/agent/settings.json</code>：</p>
+<div class="highlight highlight-source-json"><pre class="notranslate">{
+  <span class="pl-ent">"defaultProvider"</span>: <span class="pl-s"><span class="pl-pds">"</span>deepseek-aku<span class="pl-pds">"</span></span>,
+  <span class="pl-ent">"defaultModel"</span>: <span class="pl-s"><span class="pl-pds">"</span>deepseek-v4-flash<span class="pl-pds">"</span></span>,
+  <span class="pl-ent">"defaultThinkingLevel"</span>: <span class="pl-s"><span class="pl-pds">"</span>medium<span class="pl-pds">"</span></span>
+}</pre></div>
+<p><code class="notranslate">defaultThinkingLevel</code> 取值：<code class="notranslate">off/minimal/low/medium/high/xhigh/max</code>。</p>
+<h2>日常切换</h2>
+<markdown-accessiblity-table><table role="table">
+<thead>
+<tr>
+<th>操作</th>
+<th>方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>交互式切换</td>
+<td><code class="notranslate">/model</code> 里按 provider 分组选择</td>
+</tr>
+<tr>
+<td>快速循环</td>
+<td><code class="notranslate">Ctrl+P</code>（<code class="notranslate">app.model.cycleForward</code>），配合 <code class="notranslate">--models</code> 或 settings 的 <code class="notranslate">enabledModels</code> 限定循环范围</td>
+</tr>
+<tr>
+<td>启动指定</td>
+<td><code class="notranslate">pi --model deepseek-aku/deepseek-v4-flash</code></td>
+</tr>
+<tr>
+<td>临时切思考级别</td>
+<td><code class="notranslate">Shift+Tab</code>（<code class="notranslate">app.thinking.cycle</code>）</td>
+</tr>
+</tbody>
+</table></markdown-accessiblity-table>
+<h2>总结</h2>
+<pre class="notranslate"><code class="notranslate">官方 API 和公司网关同时接入 = 两个 provider + 各自 baseUrl/key
+模型标识 provider/model-id 天然区分，/model 分组展示
+modelOverrides 只改内置 provider；新 provider 必须内联 models
+api 是协议类型（openai-completions），baseUrl 带 /v1
+thinkingLevelMap 控制思考级别映射，省略 = 不支持 xhigh/max
+DeepSeek 官方 reasoning_effort 枚举只有 low/medium/high
+</code></pre>
+<p>配置一次，之后 <code class="notranslate">/model</code> 里点选即可，两个渠道互不干扰。</p></div>
+<div style="font-size:small;margin-top:8px;float:right;"></div>
+
+<button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
+<div class="comments" id="comments"></div>
+
+</div>
+    <div id="footer"><div id="footer1">Copyright © <span id="copyrightYear"></span> <a href="https://xingdongzhe.github.io">xingdongzhe's blog</a></div>
+<div id="footer2">
+    <span id="runday"></span><span>Powered by <a href="https://meekdai.com/Gmeek.html" target="_blank">Gmeek</a></span>
+</div>
+
+<script>
+var now=new Date();
+document.getElementById("copyrightYear").innerHTML=now.getFullYear();
+
+if(""!=""){
+    var startSite=new Date("");
+    var diff=now.getTime()-startSite.getTime();
+    var diffDay=Math.floor(diff/(1000*60*60*24));
+    document.getElementById("runday").innerHTML="网站运行 "+diffDay+" 天"+" • ";
+}
+</script></div>
+</body>
+<script>
+var IconList={'sun': 'M8 10.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM8 12a4 4 0 100-8 4 4 0 000 8zM8 0a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V.75A.75.75 0 018 0zm0 13a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 13zM2.343 2.343a.75.75 0 011.061 0l1.06 1.061a.75.75 0 01-1.06 1.06l-1.06-1.06a.75.75 0 010-1.06zm9.193 9.193a.75.75 0 011.06 0l1.061 1.06a.75.75 0 01-1.06 1.061l-1.061-1.06a.75.75 0 010-1.061zM16 8a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0116 8zM3 8a.75.75 0 01-.75.75H.75a.75.75 0 010-1.5h1.5A.75.75 0 013 8zm10.657-5.657a.75.75 0 010 1.061l-1.061 1.06a.75.75 0 11-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zm-9.193 9.193a.75.75 0 010 1.06l-1.06 1.061a.75.75 0 11-1.061-1.06l1.06-1.061a.75.75 0 011.061 0z', 'moon': 'M9.598 1.591a.75.75 0 01.785-.175 7 7 0 11-8.967 8.967.75.75 0 01.961-.96 5.5 5.5 0 007.046-7.046.75.75 0 01.175-.786zm1.616 1.945a7 7 0 01-7.678 7.678 5.5 5.5 0 107.678-7.678z', 'sync': 'M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z', 'home': 'M6.906.664a1.749 1.749 0 0 1 2.187 0l5.25 4.2c.415.332.657.835.657 1.367v7.019A1.75 1.75 0 0 1 13.25 15h-3.5a.75.75 0 0 1-.75-.75V9H7v5.25a.75.75 0 0 1-.75.75h-3.5A1.75 1.75 0 0 1 1 13.25V6.23c0-.531.242-1.034.657-1.366l5.25-4.2Zm1.25 1.171a.25.25 0 0 0-.312 0l-5.25 4.2a.25.25 0 0 0-.094.196v7.019c0 .138.112.25.25.25H5.5V8.25a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v5.25h2.75a.25.25 0 0 0 .25-.25V6.23a.25.25 0 0 0-.094-.195Z', 'github': 'M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z', 'copy': 'M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z', 'check': 'M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z'};
+var utterancesLoad=0;
+
+let themeSettings={
+    "dark": ["dark","moon","#00f0ff","dark-blue"],
+    "light": ["light","sun","#ff5000","github-light"],
+    "auto": ["auto","sync","","preferred-color-scheme"]
+};
+function changeTheme(mode, icon, color, utheme){
+    document.documentElement.setAttribute("data-color-mode",mode);
+    document.getElementById("themeSwitch").setAttribute("d",value=IconList[icon]);
+    document.getElementById("themeSwitch").parentNode.style.color=color;
+    if(utterancesLoad==1){utterancesTheme(utheme);}
+}
+function modeSwitch(){
+    let currentMode=document.documentElement.getAttribute('data-color-mode');
+    let newMode = currentMode === "light" ? "dark" : currentMode === "dark" ? "auto" : "light";
+    localStorage.setItem("meek_theme", newMode);
+    if(themeSettings[newMode]){
+        changeTheme(...themeSettings[newMode]);
+    }
+}
+function utterancesTheme(theme){
+    const message={type:'set-theme',theme: theme};
+    const iframe=document.getElementsByClassName('utterances-frame')[0];
+    iframe.contentWindow.postMessage(message,'https://utteranc.es');
+}
+if(themeSettings[theme]){changeTheme(...themeSettings[theme]);}
+console.log("\n %c Gmeek last https://github.com/Meekdai/Gmeek \n","padding:5px 0;background:#02d81d;color:#fff");
+</script>
+
+<script>
+document.getElementById("pathHome").setAttribute("d",IconList["home"]);
+document.getElementById("pathIssue").setAttribute("d",IconList["github"]);
+
+
+
+function openComments(){
+    cm=document.getElementById("comments");
+    cmButton=document.getElementById("cmButton");
+    cmButton.disabled=true;
+    cmButton.innerHTML="loading";
+    span=document.createElement("span");
+    span.setAttribute("class","AnimatedEllipsis");
+    cmButton.appendChild(span);
+
+    script=document.createElement("script");
+    script.setAttribute("src","https://utteranc.es/client.js");
+    script.setAttribute("repo","xingdongzhe/xingdongzhe.github.io");
+    script.setAttribute("issue-term","title");
+    
+    if(localStorage.getItem("meek_theme")=="dark"){script.setAttribute("theme","dark-blue");}
+    else if(localStorage.getItem("meek_theme")=="light") {script.setAttribute("theme","github-light");}
+    else{script.setAttribute("theme","preferred-color-scheme");}
+    
+    script.setAttribute("crossorigin","anonymous");
+    script.setAttribute("async","");
+    cm.appendChild(script);
+
+    int=self.setInterval("iFrameLoading()",200);
+}
+
+function iFrameLoading(){
+    var utterances=document.getElementsByClassName('utterances');
+    if(utterances.length==1){
+        if(utterances[0].style.height!=""){
+            utterancesLoad=1;
+            int=window.clearInterval(int);
+            document.getElementById("cmButton").style.display="none";
+            console.log("utterances Load OK");
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const createClipboardHTML = (codeContent, additionalClasses = '') => `
+        <pre class="notranslate"><code class="notranslate">${codeContent}</code></pre>
+        <div class="clipboard-container position-absolute right-0 top-0 ${additionalClasses}">
+            <clipboard-copy class="ClipboardButton btn m-2 p-0" role="button" style="display: inherit;">
+                <svg height="16" width="16" class="octicon octicon-copy m-2"><path d="${IconList["copy"]}"></path></svg>
+                <svg height="16" width="16" class="octicon octicon-check color-fg-success m-2 d-none"><path d="${IconList["check"]}"></path></svg>
+            </clipboard-copy>
+            <div class="copy-feedback">Copied!</div>
+        </div>
+    `;
+
+    const handleCodeElements = (selector = '') => {
+        document.querySelectorAll(selector).forEach(codeElement => {
+            const codeContent = codeElement.innerHTML;
+            const newStructure = document.createElement('div');
+            newStructure.className = 'snippet-clipboard-content position-relative overflow-auto';
+            newStructure.innerHTML = createClipboardHTML(codeContent);
+
+            const parentElement = codeElement.parentElement;
+            if (selector.includes('highlight')) {
+                parentElement.insertBefore(newStructure, codeElement.nextSibling);
+                parentElement.removeChild(codeElement);
+            } else {
+                parentElement.parentElement.replaceChild(newStructure, parentElement);
+            }
+        });
+    };
+
+    handleCodeElements('pre.notranslate > code.notranslate');
+    handleCodeElements('div.highlight > pre.notranslate');
+
+    let currentFeedback = null;
+    document.querySelectorAll('clipboard-copy').forEach(copyButton => {
+        copyButton.addEventListener('click', () => {
+            const codeContent = copyButton.closest('.snippet-clipboard-content').innerText;
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = codeContent;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempTextArea);
+
+            const copyIcon = copyButton.querySelector('.octicon-copy');
+            const checkIcon = copyButton.querySelector('.octicon-check');
+            const copyFeedback = copyButton.nextElementSibling;
+
+            if (currentFeedback && currentFeedback !== copyFeedback) {currentFeedback.style.display = 'none';}
+            currentFeedback = copyFeedback;
+
+            copyIcon.classList.add('d-none');
+            checkIcon.classList.remove('d-none');
+            copyFeedback.style.display = 'block';
+            copyButton.style.borderColor = 'var(--color-success-fg)';
+
+            setTimeout(() => {
+                copyIcon.classList.remove('d-none');
+                checkIcon.classList.add('d-none');
+                copyFeedback.style.display = 'none';
+                copyButton.style.borderColor = '';
+            }, 2000);
+        });
+    });
+});
+
+</script>
+
+
+</html>
